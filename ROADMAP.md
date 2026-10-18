@@ -1,0 +1,61 @@
+# Roadmap & Diario di Bordo: mini_nanofaas
+
+Documento di riferimento per tracciare lo stato di avanzamento del progetto, le decisioni architetturali, i concetti appresi e i passi futuri.
+
+---
+
+## 📌 Obiettivo del Progetto
+Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
+- **Stack tecnologico**: Java 25, Gradle (wrapper), Spring Boot 4.1.x, Docker Swarm.
+- **I 4 componenti essenziali**:
+  1. **Registro in memoria**: mappa nome → specifica (`FunctionSpec`).
+  2. **API REST**: registrazione (`POST /v1/functions`) e invocazione (`POST /v1/functions/{name}:invoke`).
+  3. **Swarm Provider**: gestione del ciclo vita dei container via Docker Swarm (`docker service create/scale/rm`).
+  4. **Dispatcher**: inoltro HTTP della richiesta di invocazione alla funzione (`http://fn-<nome>:8080/invoke`).
+
+---
+
+## 🧭 Mappa dei Passi (Fasi)
+
+### Fase 1: Il Control Plane Java (In Corso)
+- [x] **Passo 1.1**: Definizione del modello `FunctionSpec.java` (campi `name`, `imageDigest`, `replicas`, `timeoutSeconds`).
+- [x] **Passo 1.2**: Correzione e strutturazione di `FunctionController.java` (`@RestController`, `@RequestMapping("/v1/functions")`, `ConcurrentHashMap`).
+- [x] **Passo 1.3**: Implementazione registrazione `POST /v1/functions` con gestione conflitti (201 Created / 409 Conflict).
+- [ ] **Passo 1.4**: Scheletro endpoint di invocazione `POST /v1/functions/{name}:invoke` nel controller (gestione 404 Not Found).
+- [ ] **Passo 1.5**: Creazione del componente `FunctionDispatcher` con `RestClient` di Spring per inoltrare la chiamata HTTP a `http://fn-<name>:8080/invoke`.
+- [ ] **Passo 1.6**: Separazione del Registro in un `@Component` dedicato (`FunctionRegistry`) per mantenere il codice modulare e testabile.
+
+---
+
+### Fase 2: Provider Swarm (Ciclo di Vita Funzioni)
+- [ ] **Passo 2.1**: Creazione di `SwarmProvider.java` usando `ProcessBuilder` per eseguire comandi Docker CLI.
+- [ ] **Passo 2.2**: Implementazione `createService(FunctionSpec spec)` -> `docker service create --name fn-<nome> --network nanofaas-net --replicas 1 <immagine>`.
+- [ ] **Passo 2.3**: Readiness check (polling su `/health` con timeout per evitare *Connection refused* all'avvio).
+- [ ] **Passo 2.4**: Implementazione eliminazione (`docker service rm fn-<nome>`) e scaling (`docker service scale`).
+
+---
+
+### Fase 3: Funzione Demo e Rete Swarm
+- [ ] **Passo 3.1**: Inizializzazione Swarm (`docker swarm init`) e creazione overlay network (`docker network create --driver overlay --attachable nanofaas-net`).
+- [ ] **Passo 3.2**: Creazione immagine di test `test-greet` (con endpoint `/health` e `/invoke`).
+- [ ] **Passo 3.3**: Test end-to-end: registrazione da API -> creazione servizio Swarm -> invocazione via dispatcher -> risposta.
+
+---
+
+## 📖 Concetti Chiave Appresi & Decisioni
+
+1. **`ConcurrentHashMap` vs `HashMap`**:
+   - I server web gestiscono le richieste HTTP su thread paralleli (pool di thread).
+   - `HashMap` non è thread-safe e può causare race condition e corruzione della memoria.
+   - `ConcurrentHashMap` permette letture e scritture sicure senza bloccare l'intero server.
+
+2. **Convenzioni REST & Status Code**:
+   - `201 Created`: restituito quando una risorsa (la funzione) viene creata con successo.
+   - `409 Conflict`: restituito se si tenta di registrare una funzione con un nome già esistente.
+   - `404 Not Found`: restituito se si tenta di invocare o cancellare una funzione non presente nel registro.
+
+3. **Routing in Spring Boot**:
+   - `@RestController`: dichiara che i metodi restituiscono dati serializzati in JSON.
+   - `@RequestMapping("/v1/functions")`: prefisso comune URL.
+   - `@PathVariable("name")`: cattura variabili dinamiche dall'URL (`/v1/functions/{name}:invoke`).
+   - `@RequestBody`: deserializza il payload HTTP in ingresso.
