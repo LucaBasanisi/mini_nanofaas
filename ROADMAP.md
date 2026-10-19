@@ -24,28 +24,45 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 
 ## 🧭 Mappa dei Passi (Fasi)
 
-### Fase 1: Il Control Plane Java (✅ Completata)
+### Fase 1: Il Control Plane Java & Metriche
 - [x] **Passo 1.1**: Definizione del modello `FunctionSpec.java` (campi `name`, `imageDigest`, `replicas`, `timeoutSeconds`).
 - [x] **Passo 1.2**: Correzione e strutturazione di `FunctionController.java` (`@RestController`, `@RequestMapping("/v1/functions")`, `ConcurrentHashMap`).
 - [x] **Passo 1.3**: Implementazione registrazione `POST /v1/functions` con gestione conflitti (201 Created / 409 Conflict).
 - [x] **Passo 1.4**: Scheletro endpoint di invocazione `POST /v1/functions/{name}:invoke` nel controller (gestione 404 Not Found).
 - [x] **Passo 1.5**: Creazione del componente `FunctionDispatcher` con `RestClient` di Spring per inoltrare la chiamata HTTP a `http://fn-<name>:8080/invoke`.
 - [x] **Passo 1.6**: Separazione del Registro in un `@Component` dedicato (`FunctionRegistry`) per mantenere il codice modulare e testabile.
+- [ ] **Passo 1.7 (PROSSIMO STEP IMMEDIATO)**: Abilitare **Spring Boot Actuator** e **Micrometer Prometheus Registry** per esporre le metriche native e applicative su `/actuator/prometheus`.
+- [ ] **Passo 1.8**: Persistenza del catalogo funzioni con **Spring Data JPA** e database embedded **H2** (migrazione da `ConcurrentHashMap` a `@Entity` + `JpaRepository`).
 
 ---
 
-### Fase 2: Provider Swarm (Ciclo di Vita Funzioni - Prossimo Step)
-- [ ] **Passo 2.1**: Creazione di `SwarmProvider.java` usando `ProcessBuilder` per eseguire comandi Docker CLI.
-- [ ] **Passo 2.2**: Implementazione `createService(FunctionSpec spec)` -> `docker service create --name fn-<nome> --network nanofaas-net --replicas 1 <immagine>`.
-- [ ] **Passo 2.3**: Readiness check (polling su `/health` con timeout per evitare *Connection refused* all'avvio).
-- [ ] **Passo 2.4**: Implementazione eliminazione (`docker service rm fn-<nome>`) e scaling (`docker service scale`).
+### Fase 2: Ambiente Target & Provisioning (Python + Multipass + Swarm)
+*Obiettivo: Creare prima l'ambiente isolato dove girerà l'intero cluster (Control Plane, Swarm, Rete Overlay e Prometheus).*
+- [ ] **Passo 2.1**: Script Python di provisioning automatico con **Multipass**:
+  - Creazione e bootstrap di una VM Ubuntu (`nanofaas-vm`).
+  - Installazione e configurazione automatica di Docker e inizializzazione Swarm (`docker swarm init`).
+  - Creazione della rete overlay attachable (`nanofaas-net`).
+- [ ] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
+  - Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
+  - In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
 
 ---
 
-### Fase 3: Funzione Demo e Rete Swarm
-- [ ] **Passo 3.1**: Inizializzazione Swarm (`docker swarm init`) e creazione overlay network (`docker network create --driver overlay --attachable nanofaas-net`).
-- [ ] **Passo 3.2**: Creazione immagine di test `test-greet` (con endpoint `/health` e `/invoke`).
-- [ ] **Passo 3.3**: Test end-to-end: registrazione da API -> creazione servizio Swarm -> invocazione via dispatcher -> risposta.
+### Fase 3: Provider Swarm (Ciclo di Vita Funzioni)
+- [ ] **Passo 3.1**: Implementazione di `SwarmProvider.java`:
+  - Esecuzione comandi Swarm CLI via `ProcessBuilder` (es. `docker service create --name fn-<nome> --network nanofaas-net --replicas 1 <immagine>`).
+- [ ] **Passo 3.2**: Readiness check (polling su endpoint `/health` del container funzione prima di considerare il servizio pronto).
+- [ ] **Passo 3.3**: Implementazione scaling (`docker service scale`) e rimozione (`docker service rm`).
+
+---
+
+### Fase 4: Monitoring, Funzione Demo & Developer Tooling
+- [ ] **Passo 4.1**: Creazione immagine funzione demo `test-greet` (con endpoint `/health` e `/invoke`).
+- [ ] **Passo 4.2**: Deployment container **Prometheus** nella VM Multipass su `nanofaas-net`:
+  - Configurazione dello scraping continuo su `http://control-plane:8080/actuator/prometheus`.
+- [ ] **Passo 4.3**: Test end-to-end: registrazione da API -> creazione servizio Swarm -> invocazione -> verifica metriche su Prometheus.
+- [ ] **Passo 4.4**: CLI Python per lo sviluppatore/operatore:
+  - Comandi rapidi da host per impacchettare nuove funzioni, deployarle su `mini_nanofaas` e controllarne i log.
 
 ---
 
@@ -81,8 +98,13 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
    - La logica di persistenza e memorizzazione è delegata a un componente specializzato (`@Repository` `FunctionRegistry`), rendendo il codice disaccoppiato, modulare e facilmente testabile.
    - L'uso di `putIfAbsent` e `Optional<T>` garantisce thread-safety e gestione pulita dei valori assenti.
 
+7. **Decisioni di Persistenza & Architettura Dati**:
+   - **Registro Funzioni (Control Plane)**: uso di **H2** (embedded) per lo sviluppo locale e didattico con Spring Data JPA; transizione naturale a **PostgreSQL** per ambienti multi-istanza o produzione.
+   - **Stato Funzioni (Stateful Functions)**: uso di **Redis** come key-value store ultra-veloce, condiviso via overlay network tra i container/sidecar Watchdog per memorizzare lo stato applicativo con latenze minime e supporto TTL.
+
 ---
 
-## 🔮 Fase Futura: Stateful Functions via Watchdog (Rust)
+## 🔮 Fase Futura: Stateful Functions via Watchdog (Rust) & Redis
 - Copiare il codice del **Watchdog in Rust** dal progetto originale `nanofaas`.
 - Modificare il Watchdog per fungere da sidecar State API ed estendere il runtime con la gestione dello stato interno delle funzioni tra le varie invocazioni.
+- Integrazione con **Redis** deployato nello Swarm (`nanofaas-net`) per offrire endpoint di state storage (es. `GET /state/{key}`, `POST /state/{key}`) al codice utente tramite il Watchdog.
