@@ -36,12 +36,12 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 
 ---
 
-### Fase 2: Ambiente Target & Provisioning (Python + Multipass + Swarm)
+### Fase 2: Ambiente Target & Provisioning (Multipass, cloud-init / Python & Swarm)
 *Obiettivo: Creare prima l'ambiente isolato dove girerà l'intero cluster (Control Plane, Swarm, Rete Overlay e Prometheus).*
-- [ ] **Passo 2.1**: Script Python di provisioning automatico con **Multipass**:
+- [ ] **Passo 2.1**: Provisioning automatico della VM con **Multipass**:
   - Creazione e bootstrap di una VM Ubuntu (`nanofaas-vm`).
-  - Installazione e configurazione automatica di Docker e inizializzazione Swarm (`docker swarm init`).
-  - Creazione della rete overlay attachable (`nanofaas-net`).
+  - **Opzione A (cloud-init - Raccomandata)**: configurazione dichiarativa tramite file `cloud-init.yaml` (`multipass launch --cloud-init ...`) per automatizzare installazione Docker, bootstrap `docker swarm init` e creazione rete overlay attachable (`nanofaas-net`) senza tooling esterno pesante.
+  - **Opzione B (Script Python)**: automazione via wrapper Python e comandi CLI `subprocess` (utile anche come base per il developer tooling della Fase 4).
 - [ ] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
   - Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
   - In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
@@ -101,6 +101,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 7. **Decisioni di Persistenza & Architettura Dati**:
    - **Registro Funzioni (Control Plane)**: uso di **H2** (embedded) per lo sviluppo locale e didattico con Spring Data JPA; transizione naturale a **PostgreSQL** per ambienti multi-istanza o produzione.
    - **Stato Funzioni (Stateful Functions)**: uso di **Redis** come key-value store ultra-veloce, condiviso via overlay network tra i container/sidecar Watchdog per memorizzare lo stato applicativo con latenze minime e supporto TTL.
+
+8. **Provisioning Infrastrutturale: `cloud-init` vs Terraform/Ansible**:
+   - **Terraform/Ansible**: potenti per parchi macchine distribuiti e multi-cloud, ma rappresentano overengineering e dispersione di focus per una singola VM locale di sviluppo.
+   - **`cloud-init`**: standard de facto per il bootstrap dichiarativo delle istanze Linux al primo avvio. Permette di automatizzare pacchetti Docker, configurazione e comandi Swarm con un singolo file YAML pulito, supportato nativamente da Multipass (`multipass launch --cloud-init ...`) senza dipendenze esterne.
 
 ---
 
