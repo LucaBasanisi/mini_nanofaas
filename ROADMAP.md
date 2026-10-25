@@ -33,6 +33,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 - [x] **Passo 1.6**: Separazione del Registro in un `@Component` dedicato (`FunctionRegistry`) per mantenere il codice modulare e testabile.
 - [ ] **Passo 1.7 (PROSSIMO STEP IMMEDIATO)**: Abilitare **Spring Boot Actuator** e **Micrometer Prometheus Registry** per esporre le metriche native e applicative su `/actuator/prometheus`.
 - [ ] **Passo 1.8**: Persistenza del catalogo funzioni con **Spring Data JPA** e database embedded **H2** (migrazione da `ConcurrentHashMap` a `@Entity` + `JpaRepository`).
+- [ ] **Passo 1.9**: Pipeline di CI con **GitHub Actions** (`ci.yml`):
+  - Setup workflow su push e pull request verso `main`.
+  - Configurazione runner Ubuntu con Java 25 (`actions/setup-java`) e caching nativo delle dipendenze Gradle.
+  - Esecuzione automatica di test unitari (`./gradlew test`) e build (`./gradlew build`) per prevenire regressioni.
 
 ---
 
@@ -45,6 +49,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 - [ ] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
   - Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
   - In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
+- [ ] **Passo 2.3**: Pipeline di CD con **GitHub Actions** & **GHCR** (`docker-publish.yml`):
+  - Workflow per il build automatico dell'immagine OCI multi-stage del Control Plane ad ogni release o push su `main`.
+  - Pubblicazione dell'immagine container su **GitHub Container Registry** (`ghcr.io/<owner>/mini_nanofaas-controlplane`).
+  - Deploy disaccoppiato: la VM `nanofaas-vm` esegue semplicemente il `docker pull` dell'immagine pronta senza bisogno di compilare codice o installare il JDK all'interno del nodo Swarm.
 
 ---
 
@@ -105,6 +113,11 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 8. **Provisioning Infrastrutturale: `cloud-init` vs Terraform/Ansible**:
    - **Terraform/Ansible**: potenti per parchi macchine distribuiti e multi-cloud, ma rappresentano overengineering e dispersione di focus per una singola VM locale di sviluppo.
    - **`cloud-init`**: standard de facto per il bootstrap dichiarativo delle istanze Linux al primo avvio. Permette di automatizzare pacchetti Docker, configurazione e comandi Swarm con un singolo file YAML pulito, supportato nativamente da Multipass (`multipass launch --cloud-init ...`) senza dipendenze esterne.
+
+9. **CI/CD & Container Registry (GitHub Actions + GHCR)**:
+   - **Separazione Build vs Runtime**: l'ambiente di runtime (VM Multipass / Swarm) non deve contenere compilatori, JDK completi o codice sorgente; deve solo eseguire artefatti immutabili.
+   - **Feedback immediato**: la pipeline di CI garantisce che il codice compili e i test passino su un ambiente pulito prima di ogni merge.
+   - **GHCR (GitHub Container Registry)**: fornisce un registry OCI sicuro e integrato nativamente nel repository GitHub per distribuire le immagini Docker del Control Plane.
 
 ---
 
