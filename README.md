@@ -72,7 +72,7 @@ Ogni funzione registrata è descritta da un payload JSON:
 
 | Metodo | Endpoint | Descrizione | Status Code |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/v1/functions` | Registra una nuova funzione | `201 Created` / `409 Conflict` |
+| `POST` | `/v1/functions` | Registra e deploya una nuova funzione su Swarm | `201 Created` / `409 Conflict` / `500 Internal Server Error` |
 | `POST` | `/v1/functions/{name}:invoke` | Inoltra ed esegue una chiamata alla funzione | `200 OK` / `404 Not Found` |
 | `GET` | `/actuator/prometheus` | Metriche per il monitoring con Prometheus | `200 OK` |
 | `GET` | `/actuator/health` | Health check del Control Plane | `200 OK` |
@@ -83,28 +83,18 @@ Ogni funzione registrata è descritta da un payload JSON:
 
 Lo sviluppo è tracciato dettagliatamente all'interno di [ROADMAP.md](ROADMAP.md):
 
-- [x] **Fase 1**: Core Control Plane (API REST, Dispatcher, Registry H2/JPA, Metriche Prometheus).
-- [ ] **Fase 1 (completamento)**: Pipeline di CI con GitHub Actions.
-- [ ] **Fase 2**: Script Python di provisioning ambiente con Multipass e containerizzazione di Spring Boot.
-- [ ] **Fase 3**: Implementazione dello Swarm Provider per la gestione del ciclo vita dei container.
+- [x] **Fase 1**: Core Control Plane (API REST, Dispatcher, Registry H2/JPA, Metriche Prometheus, Pipeline CI).
+- [x] **Fase 2**: Provisioning VM con Multipass & `cloud-init`, Dockerfile multi-stage, Pipeline CD su GHCR e deploy su Docker Swarm.
+- [ ] **Fase 3 (In corso)**: Implementazione dello Swarm Provider (deploy container con `ProcessBuilder`, readiness check, scaling e rimozione).
 - [ ] **Fase 4**: Deploy server Prometheus, container funzione demo e CLI Python per sviluppatori.
 - [ ] **Fase Futura**: Stateful Serverless via Watchdog sidecar in Rust con storage di stato distribuito su Redis.
 
 ---
 
-## 💻 Come Avviare in Locale (Sviluppo)
+## 💻 Come Avviare
 
-### Prerequisiti
-- **JDK 25** installato e configurato (`JAVA_HOME`).
-- **Docker** (per le fasi successive di test container).
-
-### Compilazione e Avvio
-
+### 1. Avvio in Locale (Sviluppo Spring Boot)
 ```bash
-# Clona il repository
-git clone https://github.com/LucaBasanisi/mini_nanofaas.git
-cd mini_nanofaas
-
 # Compilazione ed esecuzione dei test
 ./gradlew test
 
@@ -112,4 +102,14 @@ cd mini_nanofaas
 ./gradlew bootRun
 ```
 
-Il server sarà in ascolto su `http://localhost:8080`.
+### 2. Avvio su Cluster Swarm (VM Multipass)
+Il Control Plane viene pacchettizzato e pubblicato automaticamente come immagine OCI su GitHub Container Registry:
+
+```bash
+docker service create \
+  --name control-plane \
+  --network nanofaas-net \
+  --publish published=8080,target=8080 \
+  --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  ghcr.io/lucabasanisi/mini_nanofaas-controlplane:latest
+```

@@ -57,12 +57,12 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - [x] Esecuzione lancio VM e verifica bootstrap (`docker info` e `docker network ls`).
 - [x] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
   - [x] Scrittura del `Dockerfile` multi-stage (`eclipse-temurin:25-jdk` per il build e `eclipse-temurin:25-jre` per il runtime con CLI Docker inclusa) e `.dockerignore`.
-  - [ ] Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
-  - [ ] In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
-- [ ] **Passo 2.3**: Pipeline di CD con **GitHub Actions** & **GHCR** (`docker-publish.yml`):
-  - Workflow per il build automatico dell'immagine OCI multi-stage del Control Plane ad ogni release o push su `main`.
-  - Pubblicazione dell'immagine container su **GitHub Container Registry** (`ghcr.io/<owner>/mini_nanofaas-controlplane`).
-  - Deploy disaccoppiato: la VM `nanofaas-vm` esegue semplicemente il `docker pull` dell'immagine pronta senza bisogno di compilare codice o installare il JDK all'interno del nodo Swarm.
+  - [x] Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
+  - [x] `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
+- [x] **Passo 2.3**: Pipeline di CD con **GitHub Actions** & **GHCR** (`docker-publish.yml`):
+  - [x] Workflow per il build automatico dell'immagine OCI multi-stage del Control Plane su push su `master`.
+  - [x] Pubblicazione dell'immagine container su **GitHub Container Registry** (`ghcr.io/lucabasanisi/mini_nanofaas-controlplane`).
+  - [x] Deploy disaccoppiato: la VM `nanofaas-vm` esegue `docker service create` scaricando l'immagine pronta senza compilare o avere JDK nel nodo.
 - [ ] **Passo 2.4 (Evolutiva / Ottimizzazione Developer Experience)**: Pipeline **"Golden Image" Multipass** via GitHub Actions:
   - Workflow CI per "cuocere" (baking) e comprimere l'immagine disco della VM Multipass (`qcow2.xz` / `raw.gz`) con Ubuntu, Docker e Swarm già preinstallati e configurati.
   - Pubblicazione automatica come **Asset nelle GitHub Releases**.
@@ -71,8 +71,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 ---
 
 ### Fase 3: Provider Swarm (Ciclo di Vita Funzioni)
-- [ ] **Passo 3.1**: Implementazione di `SwarmProvider.java`:
-  - Esecuzione comandi Swarm CLI via `ProcessBuilder` (es. `docker service create --name fn-<nome> --network nanofaas-net --replicas 1 <immagine>`).
+- [x] **Passo 3.1**: Implementazione di `SwarmProvider.java`:
+  - [x] Componente `@Service` per l'esecuzione di comandi Swarm CLI via `ProcessBuilder` (`docker service create --name fn-<nome> --network nanofaas-net --replicas <replicas> <immagine>`).
+  - [x] Gestione sicura delle checked exception (`IOException`, `InterruptedException`) e controllo dell'exit code (`process.waitFor() == 0`).
+  - [x] Integrazione in `FunctionController` via Constructor Injection con architettura "Check prima di Salvare" (check esistenza -> deploy Swarm -> persistenza H2 solo a deploy riuscito) per azzerare il database churn in caso di fallimenti infrastrutturali.
 - [ ] **Passo 3.2**: Readiness check (polling su endpoint `/health` del container funzione prima di considerare il servizio pronto).
 - [ ] **Passo 3.3**: Implementazione scaling (`docker service scale`) e rimozione (`docker service rm`).
 - [ ] **Passo 3.4 (Sessione Refactoring IntelliJ #2 - Architettura, Design Pattern & Astrazioni)**:
@@ -159,6 +161,15 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 13. **Runtime Provisioning (`cloud-init`) vs Golden Image (Image Baking)**:
    - **Runtime Provisioning (`cloud-init`)**: approccio snello per il repository (richiede solo un file YAML dichiarativo leggero), ma sposta il tempo di download dei pacchetti (`docker.io`) e la configurazione al primo boot sul client locale, dipendendo da CPU e banda della macchina host.
    - **Golden Image (Pre-baked VM)**: la pipeline CI (GitHub Actions) esegue il bootstrap una volta per tutte su runner cloud veloci e produce un'immagine disco immutabile e compressa distribuita via Release Asset. Il client locale deve solo decomprimerla e avviarla con Multipass (`multipass launch file://...`) con tempo di boot immediato (~5-10 secondi) e zero carico computazionale su portatili poco potenti.
+
+14. **Integrazione di Processi di Sistema con `ProcessBuilder`**:
+   - **Sicurezza & Argomenti Separati**: passare i comandi come lista di stringhe evita il passaggio da una shell intermedia (`/bin/sh`), proteggendo l'applicazione da vulnerabilità di command injection e problemi di quoting.
+   - **Ciclo di vita & Exit Code**: `ProcessBuilder.start()` lancia il processo in background restituendo un `Process`; `process.waitFor()` blocca il thread in attesa del completamento e restituisce l'exit code numerico (`0` successo).
+   - **Gestione Checked Exceptions**: obbligo di gestire `IOException` (eseguibile non trovato, permessi socket mancanti) e `InterruptedException` (thread interrotto durante l'attesa del processo esterno).
+
+15. **Strategie di Consistenza e Prevenzione Database Churn**:
+   - **Database Churn**: se un sistema esterno (Swarm) è temporaneamente guasto o sovraccarico, eseguire prima la scrittura nel database locale (`INSERT`) e poi un rollback (`DELETE`) consuma I/O e sporca lo stato inutilmente.
+   - **Pattern "Check -> Esegui -> Salva"**: verificare l'univocità con una query leggera in lettura (`existsById`), tentare l'azione esterna rischiosa (deploy del container) e persistere su database solo in caso di esito positivo garantisce consistenza naturale a zero overhead di pulizia.
 
 ---
 

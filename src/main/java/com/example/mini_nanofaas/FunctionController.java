@@ -16,10 +16,12 @@ public class FunctionController {
     // Questo è un Constructor Injection
     private final FunctionDispatcher dispatcher;
     private final FunctionRegistry registry;
+    private final SwarmProvider swarmProvider;
 
-    public FunctionController(FunctionDispatcher dispatcher, FunctionRegistry registry) {
+    public FunctionController(FunctionDispatcher dispatcher, FunctionRegistry registry,  SwarmProvider swarmProvider) {
         this.dispatcher = dispatcher;
         this.registry = registry;
+        this.swarmProvider = swarmProvider;
     }
 
 
@@ -30,12 +32,21 @@ public class FunctionController {
         // proviamo subito a salvare la funzione
         // Il metodo registerFunction restituisce un valore booleano
         // Se la funzione esiste già nel registro, restituiamo un errore 409 (Conflict)
-        if (!(registry.registerFunction(functionSpec))) {
+        if (registry.existsFunction(functionSpec.getName())) {
             return new ResponseEntity<>(HttpStatus.CONFLICT);
+        }
+        // Controlliamo il container su docker
+        boolean container_docker = swarmProvider.deploy(functionSpec);
+        if (!container_docker) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            // Se non riusciamo a creare il container allora c'è un problema
+            // Ovviamente prima cancelliamo la funzione salvato nel registry per
+        } else {
+            registry.registerFunction(functionSpec);
+            return new ResponseEntity<>(functionSpec, HttpStatus.CREATED);
         }
         // Se siamo arrivati qui allora tutto apposto, l'oggetto è stato salvato
         // Restituiamo 201 (Created) con l'oggetto salvato
-        return new ResponseEntity<>(functionSpec, HttpStatus.CREATED);
     }
 
     // endpoint di invocazione della funzione (su nanofaas vero ci si collega ad altri moduli, qua semplifichiamo le cose)

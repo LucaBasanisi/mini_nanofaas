@@ -29,4 +29,8 @@ public class FunctionRegistry {
     public boolean existsFunction(String functionName) {
         return repository.existsById(functionName);
     }
+
+    public void deleteFunction(String functionName) {
+        repository.deleteById(functionName);
+    }
 }
