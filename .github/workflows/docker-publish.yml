@@ -1,8 +1,8 @@
 name: CD - Build & Publish Docker Image
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ "master" ]
     tags: [ 'v*.*.*' ]
 
 env:
