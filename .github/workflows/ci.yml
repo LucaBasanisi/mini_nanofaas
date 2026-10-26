@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]                  # per esemplicità uso un solo nodo master
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'             # evita di scaricare tutte le dipendenze di spring boot ogni volta
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build                # compilazione del codice ed esecuzione dei test

@@ -37,6 +37,14 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - Setup workflow su push e pull request verso `main`.
   - Configurazione runner Ubuntu con Java 25 (`actions/setup-java`) e caching nativo delle dipendenze Gradle.
   - Esecuzione automatica di test unitari (`./gradlew test`) e build (`./gradlew build`) per prevenire regressioni.
+- [ ] **Passo 1.10 (Sessione Refactoring IntelliJ #1 - Pulizia & Code Smells nel Control Plane)**:
+  - *Obiettivo*: Imparare i fondamenti del refactoring assistito in IntelliJ IDEA con la rete di sicurezza della CI e dei test attivi.
+  - *Funzionalità e shortcut IntelliJ*:
+    - **Rename** (`Shift + F6`): rinomina sicura di classi, metodi, variabili e parametri con aggiornamento automatico dei riferimenti.
+    - **Extract Variable / Constant / Field** (`Ctrl + Alt + V` / `C` / `F`): eliminazione di magic numbers/strings (es. porte, percorsi URL fissi).
+    - **Extract Method** (`Ctrl + Alt + M`): scomposizione di metodi lunghi o con responsabilità multiple nel Controller o nel Dispatcher.
+    - **Inline** (`Ctrl + Alt + N`): eliminazione di variabili/metodi intermedi non necessari.
+    - **Code Inspection & Quick-Fixes** (`Alt + Enter`): identificazione e risoluzione guidata dei warning (es. warning di Spring, modern Java idiomatic constructs).
 
 ---
 
@@ -61,6 +69,14 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - Esecuzione comandi Swarm CLI via `ProcessBuilder` (es. `docker service create --name fn-<nome> --network nanofaas-net --replicas 1 <immagine>`).
 - [ ] **Passo 3.2**: Readiness check (polling su endpoint `/health` del container funzione prima di considerare il servizio pronto).
 - [ ] **Passo 3.3**: Implementazione scaling (`docker service scale`) e rimozione (`docker service rm`).
+- [ ] **Passo 3.4 (Sessione Refactoring IntelliJ #2 - Architettura, Design Pattern & Astrazioni)**:
+  - *Obiettivo*: Riorganizzare l'architettura man mano che cresce la complessità, introducendo pattern architetturali puliti grazie ai refactoring avanzati di IntelliJ IDEA.
+  - *Funzionalità e shortcut IntelliJ*:
+    - **Extract Interface / Superclass**: estrarre un'interfaccia da `SwarmProvider` (es. `ContainerOrchestrator` o `FunctionProvider`) per preparare il codice all'eventuale supporto di altri backend o mock di test.
+    - **Move Members / Move Class** (`F6`): spostamento pulito di classi ed entità verso package dedicati (es. `controller`, `service`, `provider`, `model`) lasciando che IntelliJ aggiorni tutti gli import e le dipendenze.
+    - **Change Signature** (`Ctrl + F6`): modificare firme di metodi (aggiunta/rimozione parametri, eccezioni, ritorni) con aggiornamento automatico di tutti i punti di chiamata.
+    - **Refactor This** (`Ctrl + Alt + Shift + T`): menu contestuale rapido di refactoring per valutare e applicare la trasformazione adatta in qualsiasi punto del codice.
+    - **Safe Delete** (`Alt + Delete`): rimozione sicura di codice morto o residui di vecchie implementazioni con controllo preventivo dei riferimenti.
 
 ---
 
