@@ -51,16 +51,14 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 
 ### Fase 2: Ambiente Target & Provisioning (Multipass, cloud-init / Python & Swarm)
 *Obiettivo: Creare prima l'ambiente isolato dove girerà l'intero cluster (Control Plane, Swarm, Rete Overlay e Prometheus).*
-- [ ] **Passo 2.1 (IN CORSO - Da riprendere da desktop)**: Provisioning automatico della VM con **Multipass**:
+- [x] **Passo 2.1**: Provisioning automatico della VM con **Multipass**:
   - [x] Scrittura del file `infra/cloud-init.yaml` (installazione `docker.io`, permessi utente `ubuntu`, `systemctl enable --now docker`, `docker swarm init`, creazione overlay `nanofaas-net`).
-  - [ ] Esecuzione lancio VM da postazione fissa/desktop:
-    ```bash
-    multipass launch 24.04 --name nanofaas-vm --cpus 2 --memory 2G --disk 10G --cloud-init infra/cloud-init.yaml
-    ```
-  - [ ] Verifica del bootstrap (`multipass exec nanofaas-vm -- docker info` e `docker network ls`).
-- [ ] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
-  - Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
-  - In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
+  - [x] Risoluzione del blocco DHCP/firewalld su Fedora (abilitazione interfaccia bridge in zona `trusted`).
+  - [x] Esecuzione lancio VM e verifica bootstrap (`docker info` e `docker network ls`).
+- [x] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
+  - [x] Scrittura del `Dockerfile` multi-stage (`eclipse-temurin:25-jdk` per il build e `eclipse-temurin:25-jre` per il runtime con CLI Docker inclusa) e `.dockerignore`.
+  - [ ] Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
+  - [ ] In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
 - [ ] **Passo 2.3**: Pipeline di CD con **GitHub Actions** & **GHCR** (`docker-publish.yml`):
   - Workflow per il build automatico dell'immagine OCI multi-stage del Control Plane ad ogni release o push su `main`.
   - Pubblicazione dell'immagine container su **GitHub Container Registry** (`ghcr.io/<owner>/mini_nanofaas-controlplane`).
