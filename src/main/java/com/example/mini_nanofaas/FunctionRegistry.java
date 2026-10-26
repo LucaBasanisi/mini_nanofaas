@@ -1,36 +1,32 @@
 package com.example.mini_nanofaas;
 
 import org.springframework.stereotype.Repository;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
 public class FunctionRegistry {
 
-    // Registro in memoria: mappa thread-safe nome -> FunctionSpec
-    // ConcurrentHashMap permette a più richieste HTTP concorrenti di leggere/scrivere in sicurezza
-    private final Map<String, FunctionSpec> storage = new ConcurrentHashMap<>();
+    private final FunctionRepository repository;
+    public FunctionRegistry(FunctionRepository repository) {
+        this.repository = repository;
+    }
 
-    // Metodi register
+    // Metodo register: salva solo se non esiste già
     public boolean registerFunction(FunctionSpec function) {
-        return storage.putIfAbsent(function.getName(), function) == null;
-        /*
-        • Se la funzione NON c'era, la inserisce e restituisce null. Quindi
-         l'espressione è null == null -> true! (Significa: "registrazione avvenuta con successo!").
-        • Se la funzione c'era già, restituisce il valore vecchio (diverso da null).
-        Quindi l'espressione è valore == null -> false! (Significa: "fallito, c'era già un duplicato!").
-         */
+        if (repository.existsById(function.getName())) {
+            return false;
+        }
+        repository.save(function);
+        return true;
     }
 
-    // Metodo get
+    // Metodo get: cerca per nome (chiave primaria)
     public Optional<FunctionSpec> getFunction(String functionName) {
-        return Optional.ofNullable(storage.get(functionName));
+        return repository.findById(functionName);
     }
 
-    // metodo exists
+    // Metodo exists: verifica presenza per chiave primaria
     public boolean existFunction(String functionName) {
-        return storage.containsKey(functionName);
+        return repository.existsById(functionName);
     }
-
 }

@@ -83,8 +83,8 @@ Ogni funzione registrata è descritta da un payload JSON:
 
 Lo sviluppo è tracciato dettagliatamente all'interno di [ROADMAP.md](ROADMAP.md):
 
-- [x] **Fase 1**: Core Control Plane (API REST, Dispatcher, Registry in memoria).
-- [ ] **Fase 1 (completamento)**: Integrazione metriche Prometheus e persistenza catalogo con Spring Data JPA + H2.
+- [x] **Fase 1**: Core Control Plane (API REST, Dispatcher, Registry H2/JPA, Metriche Prometheus).
+- [ ] **Fase 1 (completamento)**: Pipeline di CI con GitHub Actions.
 - [ ] **Fase 2**: Script Python di provisioning ambiente con Multipass e containerizzazione di Spring Boot.
 - [ ] **Fase 3**: Implementazione dello Swarm Provider per la gestione del ciclo vita dei container.
 - [ ] **Fase 4**: Deploy server Prometheus, container funzione demo e CLI Python per sviluppatori.

@@ -2,6 +2,8 @@ package com.example.mini_nanofaas;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.client.RestClient;
 
 @SpringBootApplication
 public class MiniNanofaasApplication {
@@ -10,4 +12,10 @@ public class MiniNanofaasApplication {
         SpringApplication.run(MiniNanofaasApplication.class, args);
     }
 
+    // Per creare il function dispatcher ho bisogno di creare fin da subito un RestClient builder
+    // è un oggetto generico, che poi io specializzo
+    @Bean
+    public RestClient.Builder restClientBuilder() {
+        return RestClient.builder();
+    }
 }

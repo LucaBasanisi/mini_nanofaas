@@ -1,10 +1,20 @@
 package com.example.mini_nanofaas;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+// quanto ho aggiunto il bean @Entity la prima volta mi ha dato errore.
+// Devo prima modificare build.gradle e poi ANCHE fare reload gradle
+// Dopo circa 2 minuti il progetto si aggiorna e non mi da più errore
+// questo perché Entity non è un bean, ma un modello di rappresetnazione dei dati
+
+@Entity
 public class FunctionSpec {
     // FunctionSpec è la funzione
     // contiene immagini docker, copie che devono girare, tempo di esecuzione massimo...
     // A cosa serve? Spring riesce a capire che dovrà convertire il json quando gli arriverà un messaggio
 
+    @Id
     private String name;
     private String imageDigest;
     private int replicas;
