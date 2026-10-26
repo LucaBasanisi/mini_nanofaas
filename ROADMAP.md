@@ -51,10 +51,13 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 
 ### Fase 2: Ambiente Target & Provisioning (Multipass, cloud-init / Python & Swarm)
 *Obiettivo: Creare prima l'ambiente isolato dove girerà l'intero cluster (Control Plane, Swarm, Rete Overlay e Prometheus).*
-- [ ] **Passo 2.1 (PROSSIMO STEP IMMEDIATO)**: Provisioning automatico della VM con **Multipass**:
-  - Creazione e bootstrap di una VM Ubuntu (`nanofaas-vm`).
-  - **Opzione A (cloud-init - Raccomandata)**: configurazione dichiarativa tramite file `cloud-init.yaml` (`multipass launch --cloud-init ...`) per automatizzare installazione Docker, bootstrap `docker swarm init` e creazione rete overlay attachable (`nanofaas-net`) senza tooling esterno pesante.
-  - **Opzione B (Script Python)**: automazione via wrapper Python e comandi CLI `subprocess` (utile anche come base per il developer tooling della Fase 4).
+- [ ] **Passo 2.1 (IN CORSO - Da riprendere da desktop)**: Provisioning automatico della VM con **Multipass**:
+  - [x] Scrittura del file `infra/cloud-init.yaml` (installazione `docker.io`, permessi utente `ubuntu`, `systemctl enable --now docker`, `docker swarm init`, creazione overlay `nanofaas-net`).
+  - [ ] Esecuzione lancio VM da postazione fissa/desktop:
+    ```bash
+    multipass launch 24.04 --name nanofaas-vm --cpus 2 --memory 2G --disk 10G --cloud-init infra/cloud-init.yaml
+    ```
+  - [ ] Verifica del bootstrap (`multipass exec nanofaas-vm -- docker info` e `docker network ls`).
 - [ ] **Passo 2.2**: Containerizzazione del Control Plane Spring Boot (`Dockerfile` multi-stage con Java 25):
   - Esecuzione del container Spring Boot collegato alla rete overlay `nanofaas-net` e con mount del Docker socket (`/var/run/docker.sock`) per pilotare Swarm.
   - In questo modo `FunctionDispatcher` può risolvere via DNS `http://fn-<name>:8080/invoke` in modo nativo e trasparente.
@@ -62,6 +65,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - Workflow per il build automatico dell'immagine OCI multi-stage del Control Plane ad ogni release o push su `main`.
   - Pubblicazione dell'immagine container su **GitHub Container Registry** (`ghcr.io/<owner>/mini_nanofaas-controlplane`).
   - Deploy disaccoppiato: la VM `nanofaas-vm` esegue semplicemente il `docker pull` dell'immagine pronta senza bisogno di compilare codice o installare il JDK all'interno del nodo Swarm.
+- [ ] **Passo 2.4 (Evolutiva / Ottimizzazione Developer Experience)**: Pipeline **"Golden Image" Multipass** via GitHub Actions:
+  - Workflow CI per "cuocere" (baking) e comprimere l'immagine disco della VM Multipass (`qcow2.xz` / `raw.gz`) con Ubuntu, Docker e Swarm già preinstallati e configurati.
+  - Pubblicazione automatica come **Asset nelle GitHub Releases**.
+  - Avvio istantaneo da qualsiasi macchina (anche laptop a basse risorse) tramite download dell'immagine pronta (`multipass launch file://$PWD/nanofaas-vm.qcow2`), azzerando i tempi di attesa di `apt` e download pacchetti al primo boot.
 
 ---
 
@@ -150,6 +157,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 12. **Refactoring Assistito con l'IDE & Code Smells**:
    - **Code Smell vs Bug**: un code smell non è un errore di compilazione o di esecuzione, ma un sintomo di accoppiamento o bassa coesione (es. violazione del Single Responsibility Principle isolando `getUrl`, o firme con wildcard non sicure `ResponseEntity<?>`).
    - **Automazione & Safe Refactoring**: strumenti dell'IDE come *Rename* (`Shift + F6`), *Extract Method* (`Ctrl + Alt + M`), *Inline* (`Ctrl + Alt + N`) e *Change Signature* (`Ctrl + F6`) aggiornano atomicamente dichiarazioni e chiamate in tutto il progetto, azzerando errori manuali e lavorando in sinergia con la rete di sicurezza della CI.
+
+13. **Runtime Provisioning (`cloud-init`) vs Golden Image (Image Baking)**:
+   - **Runtime Provisioning (`cloud-init`)**: approccio snello per il repository (richiede solo un file YAML dichiarativo leggero), ma sposta il tempo di download dei pacchetti (`docker.io`) e la configurazione al primo boot sul client locale, dipendendo da CPU e banda della macchina host.
+   - **Golden Image (Pre-baked VM)**: la pipeline CI (GitHub Actions) esegue il bootstrap una volta per tutte su runner cloud veloci e produce un'immagine disco immutabile e compressa distribuita via Release Asset. Il client locale deve solo decomprimerla e avviarla con Multipass (`multipass launch file://...`) con tempo di boot immediato (~5-10 secondi) e zero carico computazionale su portatili poco potenti.
 
 ---
 

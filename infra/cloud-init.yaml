@@ -1,0 +1,23 @@
+#cloud-config
+
+# per avviare il tutto bisogna
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - docker.io        # è il pacchetto fornito da multipass per installre docker
+
+# permessi utente
+groups:
+  - docker
+
+system_info:
+  default_user:
+    groups: [docker]  # se non aggiungiamo l'utente base dentro docker allora non possiamo usare sudo
+
+
+runcmd:
+  - systemctl enable --now docker    # ci assicuriamo che docker sia in esecuzione
+  - docker swarm init
+  - docker network create --driver overlay --attachable nanofaas-net     # creiamo la rete dello swarm,
