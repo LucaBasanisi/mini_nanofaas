@@ -39,11 +39,10 @@ public class FunctionDispatcher {
     // String url = "http://fn-" + functionName + ":8080/invoke";
     // (Ad esempio, se functionName è "saluta", allora http://fn-saluta:8080/invoke).
     public String dispatch(String functionName, String payload) {
-        String url = "http://fn-" + functionName + ":8080/invoke";
 
         // creiamo la richiesta/chiamata per il container
         var request = restClient.post()
-                .uri(url);
+                .uri(getUrl(functionName));
 
         // Se esiste il payload lo aggiungiamo, altrimenti no
         if(payload != null) {
@@ -53,6 +52,11 @@ public class FunctionDispatcher {
         // Eseguiamo la chiamata
         return request.retrieve()
                 .body(String.class);
+    }
+
+
+    private static @NonNull String getUrl(String functionName) {
+        return "http://fn-" + functionName + ":8080/invoke";
     }
 
 }

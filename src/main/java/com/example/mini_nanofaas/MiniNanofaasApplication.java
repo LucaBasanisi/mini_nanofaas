@@ -8,7 +8,7 @@ import org.springframework.web.client.RestClient;
 @SpringBootApplication
 public class MiniNanofaasApplication {
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         SpringApplication.run(MiniNanofaasApplication.class, args);
     }
 

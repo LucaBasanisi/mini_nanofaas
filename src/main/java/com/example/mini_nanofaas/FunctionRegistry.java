@@ -26,7 +26,7 @@ public class FunctionRegistry {
     }
 
     // Metodo exists: verifica presenza per chiave primaria
-    public boolean existFunction(String functionName) {
+    public boolean existsFunction(String functionName) {
         return repository.existsById(functionName);
     }
 }

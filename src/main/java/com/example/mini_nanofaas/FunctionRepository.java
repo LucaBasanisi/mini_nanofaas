@@ -1,7 +1,6 @@
 package com.example.mini_nanofaas;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 public interface FunctionRepository extends JpaRepository<FunctionSpec, String> {
 

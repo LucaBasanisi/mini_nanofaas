@@ -33,24 +33,25 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 - [x] **Passo 1.6**: Separazione del Registro in un `@Component` dedicato (`FunctionRegistry`) per mantenere il codice modulare e testabile.
 - [x] **Passo 1.7**: Abilitare **Spring Boot Actuator** e **Micrometer Prometheus Registry** per esporre le metriche native e applicative su `/actuator/prometheus`.
 - [x] **Passo 1.8**: Persistenza del catalogo funzioni con **Spring Data JPA** e database embedded **H2** (migrazione da `ConcurrentHashMap` a `@Entity` + `JpaRepository`).
-- [ ] **Passo 1.9 (PROSSIMO STEP IMMEDIATO)**: Pipeline di CI con **GitHub Actions** (`ci.yml`):
-  - Setup workflow su push e pull request verso `main`.
+- [x] **Passo 1.9**: Pipeline di CI con **GitHub Actions** (`ci.yml`):
+  - Setup workflow su push e pull request verso `master`.
   - Configurazione runner Ubuntu con Java 25 (`actions/setup-java`) e caching nativo delle dipendenze Gradle.
   - Esecuzione automatica di test unitari (`./gradlew test`) e build (`./gradlew build`) per prevenire regressioni.
-- [ ] **Passo 1.10 (Sessione Refactoring IntelliJ #1 - Pulizia & Code Smells nel Control Plane)**:
+- [x] **Passo 1.10 (Sessione Refactoring IntelliJ #1 - Pulizia & Code Smells nel Control Plane)**:
   - *Obiettivo*: Imparare i fondamenti del refactoring assistito in IntelliJ IDEA con la rete di sicurezza della CI e dei test attivi.
   - *Funzionalità e shortcut IntelliJ*:
     - **Rename** (`Shift + F6`): rinomina sicura di classi, metodi, variabili e parametri con aggiornamento automatico dei riferimenti.
     - **Extract Variable / Constant / Field** (`Ctrl + Alt + V` / `C` / `F`): eliminazione di magic numbers/strings (es. porte, percorsi URL fissi).
-    - **Extract Method** (`Ctrl + Alt + M`): scomposizione di metodi lunghi o con responsabilità multiple nel Controller o nel Dispatcher.
-    - **Inline** (`Ctrl + Alt + N`): eliminazione di variabili/metodi intermedi non necessari.
-    - **Code Inspection & Quick-Fixes** (`Alt + Enter`): identificazione e risoluzione guidata dei warning (es. warning di Spring, modern Java idiomatic constructs).
+    - **Extract Method** (`Ctrl + Alt + M`): scomposizione di metodi lunghi o con responsabilità multiple nel Controller o nel Dispatcher (`getUrl`).
+    - **Inline** (`Ctrl + Alt + N`): eliminazione di variabili intermedie non necessarie.
+    - **Change Signature** (`Ctrl + F6`): rimozione di wildcards non tipizzati (`ResponseEntity<?>` -> `ResponseEntity<String>`).
+    - **Code Inspection & Optimize Imports** (`Ctrl + Alt + O` / `Ctrl + Alt + L`): pulizia di import morti e formattazione automatica.
 
 ---
 
 ### Fase 2: Ambiente Target & Provisioning (Multipass, cloud-init / Python & Swarm)
 *Obiettivo: Creare prima l'ambiente isolato dove girerà l'intero cluster (Control Plane, Swarm, Rete Overlay e Prometheus).*
-- [ ] **Passo 2.1**: Provisioning automatico della VM con **Multipass**:
+- [ ] **Passo 2.1 (PROSSIMO STEP IMMEDIATO)**: Provisioning automatico della VM con **Multipass**:
   - Creazione e bootstrap di una VM Ubuntu (`nanofaas-vm`).
   - **Opzione A (cloud-init - Raccomandata)**: configurazione dichiarativa tramite file `cloud-init.yaml` (`multipass launch --cloud-init ...`) per automatizzare installazione Docker, bootstrap `docker swarm init` e creazione rete overlay attachable (`nanofaas-net`) senza tooling esterno pesante.
   - **Opzione B (Script Python)**: automazione via wrapper Python e comandi CLI `subprocess` (utile anche come base per il developer tooling della Fase 4).
@@ -145,6 +146,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
    - **Astrazione CRUD con `JpaRepository`**: estendendo `JpaRepository<FunctionSpec, String>`, Spring Data genera a runtime le implementazioni di metodi come `save`, `findById`, `existsById` ed `findAll` senza dover scrivere query SQL manuali.
    - **H2 Database in-memory**: database embedded ideale per test veloci e sviluppo locale isolato, rimpiazzando mappe volatili in memoria come `ConcurrentHashMap` con una vera semantica transazionale ACID.
    - **Pattern Repository & Disaccoppiamento**: mantenere il Controller isolato dai dettagli di persistenza (interfacciandosi solo con un servizio/registro dedicato) permette di cambiare il motore di memorizzazione sottostante a costo zero per l'API.
+
+12. **Refactoring Assistito con l'IDE & Code Smells**:
+   - **Code Smell vs Bug**: un code smell non è un errore di compilazione o di esecuzione, ma un sintomo di accoppiamento o bassa coesione (es. violazione del Single Responsibility Principle isolando `getUrl`, o firme con wildcard non sicure `ResponseEntity<?>`).
+   - **Automazione & Safe Refactoring**: strumenti dell'IDE come *Rename* (`Shift + F6`), *Extract Method* (`Ctrl + Alt + M`), *Inline* (`Ctrl + Alt + N`) e *Change Signature* (`Ctrl + F6`) aggiornano atomicamente dichiarazioni e chiamate in tutto il progetto, azzerando errori manuali e lavorando in sinergia con la rete di sicurezza della CI.
 
 ---
 

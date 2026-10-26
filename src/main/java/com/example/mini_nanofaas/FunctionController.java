@@ -16,12 +16,11 @@ public class FunctionController {
     // Questo è un Constructor Injection
     private final FunctionDispatcher dispatcher;
     private final FunctionRegistry registry;
+
     public FunctionController(FunctionDispatcher dispatcher, FunctionRegistry registry) {
         this.dispatcher = dispatcher;
         this.registry = registry;
     }
-
-
 
 
     @PostMapping
@@ -41,9 +40,9 @@ public class FunctionController {
 
     // endpoint di invocazione della funzione (su nanofaas vero ci si collega ad altri moduli, qua semplifichiamo le cose)
     @PostMapping("/{name}:invoke")
-    public ResponseEntity<?> invoke(@PathVariable("name") String name, @RequestBody(required = false) String payload) {
+    public ResponseEntity<String> invoke(@PathVariable("name") String name, @RequestBody(required = false) String payload) {
         // Controlliamo subito se la funzione esiste nel registry
-        if (registry.existFunction(name)) {
+        if (registry.existsFunction(name)) {
             // qui chiamiamo il FunctionDispatcher che contatterà il container Docker della funzione e restituirà l'output
             String response = dispatcher.dispatch(name, payload);
             return ResponseEntity.ok(response);
