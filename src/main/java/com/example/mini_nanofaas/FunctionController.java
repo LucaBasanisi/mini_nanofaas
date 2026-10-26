@@ -35,8 +35,9 @@ public class FunctionController {
         if (registry.existsFunction(functionSpec.getName())) {
             return new ResponseEntity<>(HttpStatus.CONFLICT);
         }
-        // Controlliamo il container su docker
+        // Creiamo il container su docker, ci vuole un pò perché sta facendo un ciclo
         boolean container_docker = swarmProvider.deploy(functionSpec);
+
         if (!container_docker) {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
             // Se non riusciamo a creare il container allora c'è un problema

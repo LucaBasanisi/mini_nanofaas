@@ -91,19 +91,62 @@ Lo sviluppo è tracciato dettagliatamente all'interno di [ROADMAP.md](ROADMAP.md
 
 ---
 
-## 💻 Come Avviare
+## 🚀 Guida all'Installazione e Avvio Rapido
 
-### 1. Avvio in Locale (Sviluppo Spring Boot)
+Il sistema non è pensato per girare come applicativo standalone sull'host, ma all'interno di un ambiente isolato con **Docker Swarm** e rete overlay dedicato, orchestrato tramite **Multipass**.
+
+### 1. Prerequisiti
+- **Git** installato sulla macchina host.
+- **Multipass** installato sull'host (`snap install multipass` o gestore pacchetti di sistema).
+
+*(Nota per utenti Fedora/RHEL)*: se `firewalld` è attivo, concedere fiducia ai bridge Multipass per consentire il rilascio dell'IP via DHCP:
 ```bash
-# Compilazione ed esecuzione dei test
-./gradlew test
-
-# Avvio del Control Plane
-./gradlew bootRun
+sudo firewall-cmd --permanent --zone=trusted --add-interface=mpqemubrzone1
+sudo firewall-cmd --permanent --zone=trusted --add-interface=mpqemubrzone2
+sudo firewall-cmd --permanent --zone=trusted --add-interface=mpqemubrzone3
+sudo firewall-cmd --reload
 ```
 
-### 2. Avvio su Cluster Swarm (VM Multipass)
-Il Control Plane viene pacchettizzato e pubblicato automaticamente come immagine OCI su GitHub Container Registry:
+---
+
+### 2. Clonare il Repository
+```bash
+git clone https://github.com/LucaBasanisi/mini_nanofaas.git
+cd mini_nanofaas
+```
+
+---
+
+### 3. Provisioning della VM con Multipass (`cloud-init`)
+Lancia la VM Ubuntu 24.04 indicando il file di bootstrap [infra/cloud-init.yaml](infra/cloud-init.yaml) (che installerà Docker, inizializzerà Docker Swarm e creerà la rete overlay `nanofaas-net`):
+
+```bash
+multipass launch 24.04 --name nanofaas-vm --cpus 2 --memory 2G --disk 10G --cloud-init infra/cloud-init.yaml
+```
+
+Verifica che la VM sia nello stato `Running` e abbia un IP IPv4 assegnato:
+```bash
+multipass list
+```
+
+---
+
+### 4. Accesso alla Shell della VM
+Entra direttamente nella shell interattiva della VM:
+```bash
+multipass shell nanofaas-vm
+```
+
+*(Opzionale)* Verifica che Swarm e la rete overlay siano attivi:
+```bash
+docker info
+docker network ls
+```
+
+---
+
+### 5. Avvio del Control Plane (Docker Swarm Service)
+All'interno della shell della VM, avvia il servizio del Control Plane. L'immagine OCI multi-stage viene scaricata direttamente da **GitHub Container Registry (GHCR)**:
 
 ```bash
 docker service create \
@@ -112,4 +155,39 @@ docker service create \
   --publish published=8080,target=8080 \
   --mount type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
   ghcr.io/lucabasanisi/mini_nanofaas-controlplane:latest
+```
+
+Verifica che il servizio abbia raggiunto lo stato desiderato (`1/1` repliche) e consulta i log di Spring Boot:
+```bash
+docker service ls
+docker service logs -f control-plane
+```
+
+---
+
+### 6. Test e Utilizzo delle API
+Puoi testare gli endpoint sia dall'interno della VM (`localhost:8080`), sia dall'host usando l'IP assegnato da Multipass alla VM (es. `10.89.24.201:8080`):
+
+#### Health Check
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+#### Registrazione e Deploy di una Funzione
+```bash
+curl -i -X POST http://localhost:8080/v1/functions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "greeter",
+    "imageDigest": "alpine:latest",
+    "replicas": 1,
+    "timeoutSeconds": 30
+  }'
+```
+
+#### Invocazione di una Funzione
+```bash
+curl -X POST http://localhost:8080/v1/functions/greeter:invoke \
+  -H "Content-Type: text/plain" \
+  -d "Ciao Mondo"
 ```
