@@ -4,6 +4,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+
+
 @RestController
 @RequestMapping("/v1/functions")
 public class FunctionController {
@@ -43,7 +45,7 @@ public class FunctionController {
             // Se non riusciamo a creare il container allora c'è un problema
             // Ovviamente prima cancelliamo la funzione salvato nel registry per
         } else {
-            registry.registerFunction(functionSpec);
+            registry.registerOrSaveFunction(functionSpec);
             return new ResponseEntity<>(functionSpec, HttpStatus.CREATED);
         }
         // Se siamo arrivati qui allora tutto apposto, l'oggetto è stato salvato
@@ -62,4 +64,38 @@ public class FunctionController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
+
+    @DeleteMapping("/{name}")
+    public ResponseEntity<String> delete(@PathVariable("name") String name) {
+        if (registry.existsFunction(name)) {
+            // Pigliamo la function spec da H2
+            if (!swarmProvider.remove(name)) {
+                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            } else {
+                // Cancelliamo la funzione da H2
+                registry.deleteFunction(name);
+                return new ResponseEntity<>(HttpStatus.OK);
+            }
+        } else return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    }
+
+
+    // Un esempio di chiamata sarà .../{name}/scale?replicas=3
+    @PostMapping("/{name}/scale")
+    public ResponseEntity<String> update(@PathVariable("name") String name, @RequestParam int replicas) {
+
+        // Funzione esiste nel registry?
+        if (registry.existsFunction(name)) {
+            // Aggiorniamo swarm
+            if (!swarmProvider.scale(name, replicas)) {
+                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            } else {
+                // Aggiorniamo H2
+                if(registry.updateReplicas(name, replicas)) {
+                    return new ResponseEntity<>(HttpStatus.OK);
+                } else return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            }
+        } return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+    }
+
 }

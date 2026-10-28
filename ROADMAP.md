@@ -88,7 +88,11 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 - [x] **Passo 3.2**: Readiness check (polling su endpoint `/health` del container funzione prima di considerare il servizio pronto):
   - [x] Implementazione metodo privato `waitForReadiness` in `SwarmProvider` con `RestClient` di Spring (`toBodilessEntity()`).
   - [x] Polling ciclico temporizzato con fallback su timeout configurabile o di default (operatore ternario) e assorbimento delle eccezioni transitorie di rete prima dell'apertura porta.
-- [ ] **Passo 3.3**: Implementazione scaling (`docker service scale`) e rimozione (`docker service rm`).
+- [x] **Passo 3.3**: Implementazione scaling (`docker service scale`) e rimozione (`docker service rm`):
+  - [x] Estrazione del metodo helper `executeCommand(ProcessBuilder)` in `DockerCliClient` (pattern DRY) e implementazione comandi CLI `removeService` (`docker service remove <name>`) e `scaleService` (`docker service update --replicas <N> <name>`).
+  - [x] Coordinamento del ciclo di vita in `SwarmProvider`: incapsulamento della convenzione di naming con prefisso `fn-` (`remove` e `scale`).
+  - [x] Sincronizzazione atomica dello stato in `FunctionRegistry`: cancellazione tramite `deleteById` e aggiornamento repliche in-place su H2 (`updateReplicas` con `findById` e `save`).
+  - [x] Esposizione endpoint REST in `FunctionController`: `DELETE /v1/functions/{name}` e `POST /v1/functions/{name}/scale?replicas={n}` con corretta gestione degli status code HTTP (`200 OK`, `404 Not Found`, `500 Internal Server Error`).
 - [ ] **Passo 3.4 (Sessione Refactoring IntelliJ #2 - Architettura, Design Pattern & Astrazioni)**:
   - *Obiettivo*: Riorganizzare l'architettura man mano che cresce la complessità, introducendo pattern architetturali puliti grazie ai refactoring avanzati di IntelliJ IDEA.
   - *Funzionalità e shortcut IntelliJ*:
@@ -131,6 +135,18 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
     - JVM con Snapshot Restore (CRaC)
     - GraalVM Native Image (confronto teorico/pratico su closed-world assumption e assenza JIT)
   - [ ] Stesura del report di sintesi nel diario di bordo con raccomandazioni per ambienti FaaS.
+
+---
+
+### Fase 6: Resilienza Distribuita, Concorrenza & Doppia Sorgente di Verità
+*Obiettivo: Gestire la concorrenza spinta (race conditions, spam di richieste delete/scale) e la consistenza eventuale tra il Database locale (H2/PostgreSQL) e l'infrastruttura esterna (Docker Swarm).*
+- [ ] **Passo 6.1 (Cancellazione & Operazioni Idempotenti)**:
+  - Gestione sicura del fallimento della CLI/API Docker quando una risorsa è già stata eliminata (*No such service* non deve bloccare la pulizia del database).
+  - Garantire l'idempotenza degli endpoint (`DELETE /v1/functions/{name}` restituisce esito positivo se la funzione cessa di esistere, indipendentemente da quanti tentativi concorrenti arrivino).
+- [ ] **Passo 6.2 (Gestione Race Conditions & Locking)**:
+  - Protezione dalle race condition su invocazioni contemporanee di `register`, `scale` e `delete` sullo stesso nome di funzione (optimistic locking con `@Version` in JPA o lock a livello di applicazione/registro).
+- [ ] **Passo 6.3 (Reconciliation Loop / Pattern Riconciliatore)**:
+  - Background task periodico (ispirato ai controller di Kubernetes) che confronta i servizi attivi su Docker Swarm (`docker service ls`) con le righe della tabella in H2, correggendo disallineamenti e container orfani.
 
 ---
 
@@ -227,6 +243,17 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
      - Sfrutta Linux CRIU per "congelare" l'intero heap e stato della JVM già riscaldata e avviata, salvandolo su disco.
      - Al risveglio (restore), l'applicazione riparte in poche decine di millisecondi (sub-50ms) dallo stato esatto in cui era stata congelata. Richiede gestione attiva delle risorse (`org.crac.Resource`) per chiudere e riaprire socket di rete o connessioni database prima del freeze.
    - **GraalVM Native Image**: compila in codice macchina AOT a tempo di build sotto la *closed-world assumption*, garantendo boot istantaneo e footprint minimo, ma sacrificando la compilazione JIT dinamica a lungo termine e richiedendo configurazioni esplicite per reflection e bytecode dynamic loading.
+
+19. **Ciclo di Vita & Pattern DRY nella CLI Docker (`DockerCliClient`)**:
+    - **Centralizzazione dell'esecuzione comandi**: estrazione di un metodo helper (`executeCommand`) per evitare la duplicazione della gestione dei thread, `ProcessBuilder.start()`, `process.waitFor()` e delle checked exception (`IOException`, `InterruptedException`).
+    - **Argomenti posizionali vs flag Docker**: la CLI Docker distingue nettamente tra argomenti posizionali (`docker service remove <name>`, `docker service update ... <name>`) e flag (`--name`, `--replicas`).
+
+20. **Aggiornamento di Stato e Semantica `JpaRepository`**:
+    - **Ciclo di vita dell'entità e persistenza in H2**: recupero dell'oggetto da `findById(id)`, modifica in memoria dei campi (`setReplicas`) e persistenza atomica tramite `save()` per sincronizzare lo stato applicativo nel database relazionale.
+
+21. **Semantica REST per Operazioni di Ciclo di Vita (Scaling & Deletion)**:
+    - **Verbo `DELETE` su Risorse Univoche**: l'eliminazione si modella canonicamente con `@DeleteMapping("/{name}")` e `@PathVariable`, restituendo `200 OK` (o `204 No Content`) a successo o `404 Not Found` se inesistente.
+    - **Sottomisorse & Operazioni di Scaling**: endpoint dedicato `POST /v1/functions/{name}/scale?replicas={n}` con `@RequestParam int replicas` per separare il routing dai parametri operativi.
 
 ---
 

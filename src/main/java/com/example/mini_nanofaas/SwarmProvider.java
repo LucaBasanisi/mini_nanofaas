@@ -1,8 +1,10 @@
 package com.example.mini_nanofaas;
 
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
 
 /**
  * Gestore del ciclo di vita dei servizi all'interno del cluster Docker Swarm.
@@ -43,7 +45,7 @@ public class SwarmProvider {
      * @return true se il servizio è stato creato con successo ed è pronto a ricevere traffico, false altrimenti.
      */
     public boolean deploy(FunctionSpec function) {
-        String serviceName = "fn-" + function.getName();
+        String serviceName = getServiceName(function.getName());
         log.info("Avvio del deploy per la funzione '{}' (immagine: {}, repliche: {})",
                 function.getName(), function.getImageDigest(), function.getReplicas());
 
@@ -64,4 +66,19 @@ public class SwarmProvider {
         // La logica di polling e retry con backoff è completamente gestita da FunctionHealthChecker tramite Spring Retry.
         return healthChecker.checkReadiness(function.getName());
     }
+
+    public boolean remove(String functionName) {
+        String serviceName = getServiceName(functionName);
+        return dockerCliClient.removeService(serviceName);
+    }
+
+    public boolean scale(String functionName, int replicas) {
+        String serviceName = getServiceName(functionName);
+        return dockerCliClient.scaleService(serviceName, replicas);
+    }
+
+    private static @NonNull String getServiceName(String functionName) {
+        return "fn-" + functionName;
+    }
+
 }

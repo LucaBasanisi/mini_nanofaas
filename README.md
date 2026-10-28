@@ -74,6 +74,8 @@ Ogni funzione registrata è descritta da un payload JSON:
 | :--- | :--- | :--- | :--- |
 | `POST` | `/v1/functions` | Registra e deploya una nuova funzione su Swarm | `201 Created` / `409 Conflict` / `500 Internal Server Error` |
 | `POST` | `/v1/functions/{name}:invoke` | Inoltra ed esegue una chiamata alla funzione | `200 OK` / `404 Not Found` |
+| `POST` | `/v1/functions/{name}/scale` | Ridimensiona il numero di repliche su Swarm e aggiorna H2 (`?replicas=N`) | `200 OK` / `404 Not Found` / `500 Internal Server Error` |
+| `DELETE` | `/v1/functions/{name}` | Elimina il servizio Swarm e rimuove la funzione da H2 | `200 OK` / `404 Not Found` / `500 Internal Server Error` |
 | `GET` | `/actuator/prometheus` | Metriche per il monitoring con Prometheus | `200 OK` |
 | `GET` | `/actuator/health` | Health check del Control Plane | `200 OK` |
 
