@@ -114,39 +114,100 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 
 ---
 
-### Fase 5: Ottimizzazione Prestazioni, Cold Start & JVM Next-Gen: AOT Cache (Leyden) e CRaC
+### Fase 5: Resilienza Distribuita, Concorrenza & Doppia Sorgente di Verità
+*Obiettivo: Gestire la concorrenza spinta (race conditions, spam di richieste delete/scale), la tolleranza ai guasti nelle chiamate remote e la consistenza eventuale tra il Database locale (H2/PostgreSQL) e l'infrastruttura esterna (Docker Swarm).*
+- [ ] **Passo 5.1 (Cancellazione & Operazioni Idempotenti)**:
+  - Gestione sicura del fallimento della CLI/API Docker quando una risorsa è già stata eliminata (*No such service* non deve bloccare la pulizia del database).
+  - Garantire l'idempotenza degli endpoint (`DELETE /v1/functions/{name}` restituisce esito positivo se la funzione cessa di esistere, indipendentemente da quanti tentativi concorrenti arrivino).
+- [ ] **Passo 5.2 (Gestione Race Conditions, Concorrenza & Locking Granulare)**:
+  - Protezione dalle race condition su invocazioni contemporanee di `register`, `scale` e `delete` sullo stesso nome di funzione.
+  - Implementazione di optimistic locking con `@Version` su `FunctionSpec` in JPA per rilevare conflitti di concorrenza sui metadati.
+  - Meccanismo di locking per chiave/funzione (es. `Striped Lock` o lock nominati in memoria) per impedire operazioni concorrenti e distruttive sulla medesima funzione (es. deploy in corso vs delete simultaneo).
+- [ ] **Passo 5.3 (Circuit Breaker, Retries & Fallback nel Dispatcher)**:
+  - Protezione del Control Plane contro effetti a cascata (*cascading failures*) e saturazione dei thread HTTP quando i container delle funzioni sono lenti o in crash.
+  - Introduzione del pattern **Circuit Breaker** su `FunctionDispatcher` (stato *Closed*, *Open*, *Half-Open*) con tempi di apertura e chiusura configurabili.
+  - Policy di **Retry con Backoff esponenziale & Jitter** per assorbire anomalie transitorie di rete.
+  - Risposta di fallback con codici HTTP precisi (`503 Service Unavailable` o `504 Gateway Timeout`) e header informativi.
+- [ ] **Passo 5.4 (Reconciliation Loop / Pattern Riconciliatore & Self-Healing)**:
+  - Background task periodico (`@Scheduled` di Spring Boot, ispirato all'architettura a controller di Kubernetes).
+  - Algoritmo di riconciliazione a 3 vie tra stato desiderato (H2) e stato effettivo (Docker Swarm):
+    1. *Funzione nel catalogo ma assente in Swarm*: ri-creazione automatica del servizio Swarm o transizione a stato `DEGRADED`.
+    2. *Servizio in Swarm ma assente nel catalogo*: garbage collection automatica dei container/servizi orfani via `docker service rm`.
+    3. *Discrepanza di repliche*: allineamento automatico delle repliche attive rispetto a quelle configurate a catalogo.
+  - Esportazione su Prometheus delle metriche del riconciliatore (durata del ciclo, discrepanze rilevate, azioni correttive applicate).
+- [ ] **Passo 5.5 (Macchina a Stati della Funzione & Transazioni Compensative)**:
+  - Definizione degli stati del ciclo di vita: `PENDING`, `READY`, `DEGRADED`, `SCALING`, `TERMINATING`.
+  - Transazioni compensative (Saga minimale): se la creazione del servizio Swarm ha successo ma il readiness check va in timeout irreversibile, scatta il rollback infrastrutturale automatico per non lasciare container zombie.
+
+---
+
+### Fase 6: Architettura DDBMS & Stateful Serverless: Persistenza Distribuita & Ripresa dello Stato al Crash del Nodo
+*Obiettivo: Trasformare `mini_nanofaas` da piattaforma serverless puramente stateless a un vero e proprio DDBMS distribuito per Stateful Functions. Garantire che lo stato applicativo di una funzione sia replicato su cluster multi-nodo e possa essere ripreso istantaneamente e senza perdita di dati (Zero Data Loss / RPO=0) quando il nodo fisico o virtuale su cui gira il container subisce un crash improvviso.*
+- [ ] **Passo 6.1 (Topologia Swarm Multi-Nodo & Cluster DDBMS Replicato)**:
+  - Estensione dell'ambiente locale con Multipass per creare un cluster Docker Swarm multi-nodo (1 Manager + 2 Worker collegati su `nanofaas-net`).
+  - Deployment di un engine DDBMS distribuito su Swarm con replica attiva e tolleranza ai partizionamenti (es. cluster Redis Sentinel / Redis Cluster con replica master-replica e persistenza AOF su volumi indipendenti, oppure store distribuito basato su Raft come TiKV/etcd).
+  - Definizione del modello di consistenza distribuita (Quorum writes, Read-Your-Writes e durability guarantees).
+- [ ] **Passo 6.2 (Pattern Stateful Functions & Checkpointing / Write-Ahead Logging)**:
+  - Definizione del ciclo di vita dello stato della funzione: astrazione di *Stateful Entity / Virtual Actor* (chiave di partizionamento per-funzione o per-istanza: `fn:<name>:<key>`).
+  - Strategia a doppio livello di persistenza:
+    1. **Write-Ahead Logging (WAL)**: ogni mutazione dello stato generata durante l'invocazione (`POST :invoke`) viene committata atomicamente sul cluster DDBMS prima di inviare il `200 OK` al client.
+    2. **Snapshotting periodico**: compattazione e serializzazione periodica dello stato in-memory per accelerare i tempi di recupero ed evitare replay infiniti dei log.
+- [ ] **Passo 6.3 (Fencing Tokens, Lease Distribuiti & Protezione Split-Brain)**:
+  - Gestione dei *network partition* e *grey failures* (nodo creduto morto dall'orchestratore, ma ancora attivo e in grado di scrivere).
+  - Implementazione del meccanismo di **Fencing Token** (monotonically increasing versioning o lease distribuiti con TTL sul DDBMS).
+  - Rifiuto categorico da parte del DDBMS di qualsiasi operazione di scrittura proveniente da istanze "zombie" con token obsoleto, prevenendo divergenze o corruzione silente dello stato.
+- [ ] **Passo 6.4 (Node Crash Detection, Swarm Task Rescheduling & State Rehydration)**:
+  - Simulazione del crash hardware o arresto improvviso di un worker Swarm (`multipass stop nanofaas-worker-1`).
+  - Docker Swarm rileva il mancato heartbeat del nodo e ripianifica (`reschedule`) il container della funzione su un worker superstite.
+  - Procedura di **State Rehydration**: al boot sul nuovo nodo, la funzione/sidecar interroga il DDBMS durante il readiness check, ricarica l'ultimo snapshot coerente, riapplica i log del WAL non consolidati e notifica la disponibilità al traffico.
+- [ ] **Passo 6.5 (Deduplicazione Invocazioni & Semantica Transazionale Exactly-Once)**:
+  - Gestione delle chiamate HTTP in-flight al momento esatto del crash del nodo.
+  - Implementazione di **Idempotency Keys** passate dal chiamante o generate dal Dispatcher (`X-Idempotency-Key` salvata con TTL nel DDBMS).
+  - Se il client riprova l'invocazione verso la nuova istanza della funzione, il DDBMS rileva la chiave già processata e restituisce la risposta registrata senza rieseguire la logica di business né alterare nuovamente lo stato (semantica *effectively-once*).
+
+---
+
+### Fase 7: Chaos Engineering, Fault Injection & Stress Testing
+*Obiettivo: Verificare empiricamente sul campo l'efficacia dei meccanismi di resilienza, la convergenza del Reconciliation Loop, la tenuta del DDBMS e il ripristino istantaneo dello stato al crollo di nodi fisici nello Swarm.*
+- [ ] **Passo 7.1 (Chaos Infrastrutturale: Container Kill, Service Termination & Node Eviction Out-of-Band)**:
+  - Iniezione di guasti esterni: uccisione violenta di container (`docker kill`), rimozione diretta di servizi Swarm e spegnimento brutale di interi nodi del cluster (`multipass stop nanofaas-worker-1`).
+  - Verifica empirica: Swarm ripianifica il servizio sul nodo superstite, il *Reconciliation Loop* corregge le discrepanze, e la funzione ripristina il proprio stato dal DDBMS senza alcuna perdita (*Zero Data Loss verification*).
+- [ ] **Passo 7.2 (Chaos di Rete: Latenza, Packet Loss & Partizioni sulla Rete Overlay)**:
+  - Simulazione di degrado della rete overlay `nanofaas-net` (tramite `tc` / `iptables` / Toxiproxy o Pumba): iniezione di latenza artificiale (es. 2000ms), perdita di pacchetti e partizioni parziali tra Control Plane, container funzioni e cluster DDBMS.
+  - Validazione empirica del Circuit Breaker e dei Fencing Tokens sotto isolamento di rete (verifica assenza di split-brain nel DDBMS).
+- [ ] **Passo 7.3 (Concurrency Fuzzing & Stress Test sotto Carico Massivo)**:
+  - Test di carico ad alta concorrenza (es. con script Python / k6 / wrk): bombardamento simultaneo di `register`, `scale`, `delete` e `invoke` su centinaia di thread paralleli con mutazioni di stato continue.
+  - Verifica della tenuta dei lock e delle transazioni DDBMS: assenza di deadlock nel Control Plane, persistenza integra in H2 e nel DDBMS (nessun dato corrotto o record fantasma).
+- [ ] **Passo 7.4 (Crash & Cold Recovery del Control Plane)**:
+  - Simulazione di riavvio improvviso del nodo manager o crash del Control Plane (`kill -9`) durante operazioni intensive di scale o registrazione.
+  - Bootstrap recovery: all'avvio successivo, il Control Plane deve re-sincronizzare lo stato H2 con Swarm e col DDBMS senza cancellare per errore servizi attivi e sani.
+- [ ] **Passo 7.5 (Osservabilità del Chaos: Metriche MTTR, RPO/RTO & Dashboard di Resilienza)**:
+  - Monitoraggio in tempo reale durante i test di chaos tramite Prometheus: misurazione di MTTR (*Mean Time to Recovery*), RTO (*Recovery Time Objective*), verifica RPO=0 (*Recovery Point Objective*), tasso di fallimento invocazioni, saturazione pool di connessioni e memoria JVM.
+  - Definizione di SLO (Service Level Objectives) minimi di resilienza per la piattaforma.
+
+---
+
+### Fase 8: Ottimizzazione Prestazioni, Cold Start & JVM Next-Gen: AOT Cache (Leyden) e CRaC
 *Obiettivo: Esplorare le frontiere dell'avvio istantaneo della JVM per eliminare il problema del Cold Start nelle piattaforme Serverless/FaaS sia lato Control Plane che lato funzioni utente.*
-- [ ] **Passo 5.1 (AOT Cache sul Control Plane)**:
+- [ ] **Passo 8.1 (AOT Cache sul Control Plane)**:
   - [ ] Comprensione del modello a due fasi di **Project Leyden / JEP 516** (`-XX:AOTMode=record` durante la "training run" e `-XX:AOTMode=on` a runtime).
   - [ ] Aggiornamento del `Dockerfile` multi-stage del Control Plane per eseguire una corsa di addestramento (context startup + readiness check e shutdown automatico) producendo l'archivio pre-risolto delle classi (`.aot`).
   - [ ] Misurazione del tempo di avvio (`Started MiniNanofaasApplication in X seconds`) e della memoria residente (RSS) prima e dopo l'abilitazione della AOT Cache.
-- [ ] **Passo 5.2 (AOT Cache per il Runtime delle Funzioni FaaS)**:
+- [ ] **Passo 8.2 (AOT Cache per il Runtime delle Funzioni FaaS)**:
   - [ ] Creazione del template base per funzioni serverless Java con AOT Cache pre-addestrata.
   - [ ] Abbattimento dei tempi di readiness check (`waitForReadiness` in `SwarmProvider`) durante lo scale-up o cold start on-demand.
   - [ ] Verifica del mantenimento delle caratteristiche JVM standard: profilazione con Java Flight Recorder (JFR) e compilazione JIT ad alte prestazioni a regime continuo.
-- [ ] **Passo 5.3 (Sperimentazione CRaC - Coordinated Restore at Checkpoint)**:
+- [ ] **Passo 8.3 (Sperimentazione CRaC - Coordinated Restore at Checkpoint)**:
   - [ ] Studio dell'architettura **CRaC** basata su CRIU (Linux Checkpoint/Restore in Userspace) supportata da Azul Zulu / OpenJDK CRaC.
   - [ ] Gestione del ciclo di vita con l'interfaccia `org.crac.Resource` (`beforeCheckpoint` e `afterRestore`) per chiudere/riaprire connessioni di rete (es. socket Swarm, database, client HTTP).
   - [ ] Creazione di uno snapshot di una funzione pre-riscaldata e ripristino istantaneo sub-100ms.
-- [ ] **Passo 5.4 (Analisi Comparativa Prestazioni & Trade-off Architetturali)**:
+- [ ] **Passo 8.4 (Analisi Comparativa Prestazioni & Trade-off Architetturali)**:
   - [ ] Benchmark comparativo su 3 dimensioni (Tempo di avvio al primo invoke, Consumo memoria RSS al boot, Picco di throughput JIT):
     - JVM Standard Vanilla (Java 25)
     - JVM con AOT Cache (Project Leyden / JEP 516)
     - JVM con Snapshot Restore (CRaC)
     - GraalVM Native Image (confronto teorico/pratico su closed-world assumption e assenza JIT)
   - [ ] Stesura del report di sintesi nel diario di bordo con raccomandazioni per ambienti FaaS.
-
----
-
-### Fase 6: Resilienza Distribuita, Concorrenza & Doppia Sorgente di Verità
-*Obiettivo: Gestire la concorrenza spinta (race conditions, spam di richieste delete/scale) e la consistenza eventuale tra il Database locale (H2/PostgreSQL) e l'infrastruttura esterna (Docker Swarm).*
-- [ ] **Passo 6.1 (Cancellazione & Operazioni Idempotenti)**:
-  - Gestione sicura del fallimento della CLI/API Docker quando una risorsa è già stata eliminata (*No such service* non deve bloccare la pulizia del database).
-  - Garantire l'idempotenza degli endpoint (`DELETE /v1/functions/{name}` restituisce esito positivo se la funzione cessa di esistere, indipendentemente da quanti tentativi concorrenti arrivino).
-- [ ] **Passo 6.2 (Gestione Race Conditions & Locking)**:
-  - Protezione dalle race condition su invocazioni contemporanee di `register`, `scale` e `delete` sullo stesso nome di funzione (optimistic locking con `@Version` in JPA o lock a livello di applicazione/registro).
-- [ ] **Passo 6.3 (Reconciliation Loop / Pattern Riconciliatore)**:
-  - Background task periodico (ispirato ai controller di Kubernetes) che confronta i servizi attivi su Docker Swarm (`docker service ls`) con le righe della tabella in H2, correggendo disallineamenti e container orfani.
 
 ---
 
@@ -255,9 +316,15 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
     - **Verbo `DELETE` su Risorse Univoche**: l'eliminazione si modella canonicamente con `@DeleteMapping("/{name}")` e `@PathVariable`, restituendo `200 OK` (o `204 No Content`) a successo o `404 Not Found` se inesistente.
     - **Sottomisorse & Operazioni di Scaling**: endpoint dedicato `POST /v1/functions/{name}/scale?replicas={n}` con `@RequestParam int replicas` per separare il routing dai parametri operativi.
 
+22. **Architettura DDBMS & Stateful Serverless (Crash del Nodo e Ripristino dello Stato)**:
+    - **Stateless vs Stateful FaaS**: nei sistemi FaaS canonici i container sono effimeri e privi di memoria; nei sistemi stateful il container è solo un'unità di computazione rimpiazzabile, mentre l'identità e lo stato risiedono in un cluster DDBMS condiviso, distribuito e replicato.
+    - **State Rehydration**: alla ripartenza di una funzione su un nuovo nodo Swarm dopo la morte del worker precedente, il runtime esegue una query di reidratazione caricando l'ultimo snapshot valido e il Write-Ahead Log (WAL) prima di accettare traffico.
+    - **Fencing Tokens & Partizioni di Rete**: in caso di isolamento parziale di rete, Swarm potrebbe avviare un nuovo container credendo che il vecchio sia morto (grey failure); i Fencing Token (contatori monotonici verificati dal DDBMS) garantiscono che solo l'istanza con il lease attivo possa scrivere sul database, neutralizzando tentativi di scrittura da nodi zombie e prevenendo split-brain.
+
 ---
 
-## 🔮 Fase Futura: Stateful Functions via Watchdog (Rust) & Redis
-- Copiare il codice del **Watchdog in Rust** dal progetto originale `nanofaas`.
-- Modificare il Watchdog per fungere da sidecar State API ed estendere il runtime con la gestione dello stato interno delle funzioni tra le varie invocazioni.
-- Integrazione con **Redis** deployato nello Swarm (`nanofaas-net`) per offrire endpoint di state storage (es. `GET /state/{key}`, `POST /state/{key}`) al codice utente tramite il Watchdog.
+## 🔮 Fasi Future & Ricerca Avanzata
+*(Nota: la gestione delle Stateful Functions con DDBMS distribuito è stata promossa a Fase 6 attiva del progetto).*
+- **Event-Driven Architecture**: integrazione con broker distribuiti (Apache Kafka o NATS JetStream) per abilitare invocazioni asincrone su code di messaggi ed event streams ad altissimo throughput.
+- **WebAssembly (Wasm) Runtime**: supporto a moduli Wasm (es. Wasmtime / Wasmer) per esecuzioni serverless multi-linguaggio con cold start sub-millisecondo e footprint di memoria microscopico (<5MB).
+- **Federazione Multi-Cluster & Edge Orchestration**: deployment geograficamente distribuito (Edge-to-Cloud) con replica attiva-attiva del catalogo e del DDBMS tra cluster Swarm multipli.
