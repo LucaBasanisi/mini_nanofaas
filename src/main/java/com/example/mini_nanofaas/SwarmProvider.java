@@ -1,77 +1,67 @@
 package com.example.mini_nanofaas;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
-import java.io.IOException;
-
+/**
+ * Gestore del ciclo di vita dei servizi all'interno del cluster Docker Swarm.
+ *
+ * Responsabilità:
+ * 1. Orchestrazione del deploy di una funzione:
+ *    - Delega la creazione del servizio Docker CLI a {@link DockerCliClient}.
+ *    - Delega la verifica dello stato di avvio e salute a {@link FunctionHealthChecker}.
+ *
+ * Grazie alla separazione delle responsabilità (Separation of Concerns):
+ * - Non ci sono chiamate a ProcessBuilder di basso livello in questa classe.
+ * - Non ci sono loop bloccanti 'while' o 'Thread.sleep()' per il controllo di readiness.
+ * - È facilmente testabile con test JUnit isolando le dipendenze tramite mock.
+ */
 @Service
 public class SwarmProvider {
 
-    // Ho usato RestClient anche dentro il functionDispatcher
-    // Serve a fare chiamate interne ai servizi dell'applicazione
-    public SwarmProvider(RestClient.Builder builder) {
-        this.restClient = builder.build();
-    }
-    private final RestClient restClient;
+    private static final Logger log = LoggerFactory.getLogger(SwarmProvider.class);
 
-    private boolean waitForReadiness(String functionName, int timeoutSeconds) {
-        String url = "http://fn-" + functionName + ":8080/health";
-        long deadline = System.currentTimeMillis() + (timeoutSeconds * 1000L);
+    // Nome della rete overlay Docker Swarm condivisa su cui comunicano i container
+    private static final String DEFAULT_NETWORK = "nanofaas-net";
 
-        while (System.currentTimeMillis() < deadline) {
-            try {
-                // Interroghiamo l'endpoint di stato /health
-                var response = restClient.get()
-                        .uri(url)
-                        .retrieve()
-                        .toBodilessEntity();
+    private final DockerCliClient dockerCliClient;
+    private final FunctionHealthChecker healthChecker;
 
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    return true;
-                }
-            } catch (Exception e) {
-                // Il container non è ancora pronto (connessione rifiutata o timeout)
-                // Ignoriamo l'errore momentaneo e riproviamo tra poco
-            }
-
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-
-        return false;
+    public SwarmProvider(DockerCliClient dockerCliClient, FunctionHealthChecker healthChecker) {
+        this.dockerCliClient = dockerCliClient;
+        this.healthChecker = healthChecker;
     }
 
+    /**
+     * Esegue il deploy di una funzione su Docker Swarm:
+     * Passo 1: Crea il servizio Docker Swarm tramite la CLI.
+     * Passo 2: Se la creazione ha avuto successo, attende che il servizio diventi 'ready'
+     *          interrogando l'endpoint di healthcheck delegato a Spring Retry.
+     *
+     * @param function Specifica della funzione da deployare (nome, immagine, repliche, ecc.)
+     * @return true se il servizio è stato creato con successo ed è pronto a ricevere traffico, false altrimenti.
+     */
     public boolean deploy(FunctionSpec function) {
-        ProcessBuilder pb = new ProcessBuilder(
-                "docker", "service", "create",
-                "--name", "fn-" + function.getName(),
-                "--network", "nanofaas-net",
-                "--replicas", String.valueOf(function.getReplicas()),
+        String serviceName = "fn-" + function.getName();
+        log.info("Avvio del deploy per la funzione '{}' (immagine: {}, repliche: {})",
+                function.getName(), function.getImageDigest(), function.getReplicas());
+
+        // PASSO 1: Esecuzione del comando Docker Swarm CLI ('docker service create ...')
+        boolean created = dockerCliClient.createService(
+                serviceName,
+                DEFAULT_NETWORK,
+                function.getReplicas(),
                 function.getImageDigest()
         );
-        Process process;
-        try {
-            // Situazione normale, funziona tutto
-            process = pb.start();
-            int exitCode = process.waitFor();
-            if(exitCode != 0) return false;
 
-            // Se siamo qua allora docker ha creato il servizio, aspettiamo che parta
-            // Boh usiamo questo if strano
-            int timeout = function.getTimeoutSeconds() > 0 ? function.getTimeoutSeconds() : 5;
-            return waitForReadiness(function.getName(), timeout);
-        } catch (IOException e) {
-            // Eccezione
-            return false;
-        } catch (InterruptedException e) {
-            // Qualcosa è andato storto
-            Thread.currentThread().interrupt();
+        if (!created) {
+            log.error("Creazione del servizio Docker Swarm fallita per la funzione '{}'", function.getName());
             return false;
         }
+
+        // PASSO 2: Verifica di readiness del servizio appena avviato
+        // La logica di polling e retry con backoff è completamente gestita da FunctionHealthChecker tramite Spring Retry.
+        return healthChecker.checkReadiness(function.getName());
     }
 }
