@@ -42,7 +42,7 @@ public class FunctionDispatcher {
 
         // creiamo la richiesta/chiamata per il container
         var request = restClient.post()
-                .uri(getUrl(functionName));
+                .uri(FunctionSpec.invokeUrlFor(functionName));
 
         // Se esiste il payload lo aggiungiamo, altrimenti no
         if(payload != null) {
@@ -52,11 +52,6 @@ public class FunctionDispatcher {
         // Eseguiamo la chiamata
         return request.retrieve()
                 .body(String.class);
-    }
-
-
-    private static @NonNull String getUrl(String functionName) {
-        return "http://fn-" + functionName + ":8080/invoke";
     }
 
 }

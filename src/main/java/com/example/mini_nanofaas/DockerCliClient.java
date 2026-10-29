@@ -6,14 +6,16 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 
+/**
+ * Servizio dedicato a comporre e inviare i comandi docker. Serve a scollegare la logica della cli di docker dallo {@link SwarmProvider}
+ * Utilizza Process Builder per
+ */
+
+
 @Service
 public class DockerCliClient {
 
-    // Serve a scollegare la logica della cli di docker dallo swarmprovider
-    // Altrimenti swarm provider diventa una classe troppo lunga e pallosa da leggere
-    // Metodo createService per creare un container docker
-    // Metodo removeService
-    // Metodo scaleService per modificare quante repliche creare
+
 
     private static final Logger log = LoggerFactory.getLogger(DockerCliClient.class);
 

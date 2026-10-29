@@ -18,38 +18,42 @@ public class FunctionController {
     // Questo è un Constructor Injection
     private final FunctionDispatcher dispatcher;
     private final FunctionRegistry registry;
-    private final SwarmProvider swarmProvider;
+    private final ProviderFunzione functionProvider;
 
-    public FunctionController(FunctionDispatcher dispatcher, FunctionRegistry registry,  SwarmProvider swarmProvider) {
+    public FunctionController(FunctionDispatcher dispatcher, FunctionRegistry registry,  ProviderFunzione provider) {
         this.dispatcher = dispatcher;
         this.registry = registry;
-        this.swarmProvider = swarmProvider;
+        this.functionProvider = provider;
     }
 
 
     @PostMapping
     public ResponseEntity<FunctionSpec> register(@RequestBody FunctionSpec functionSpec) {
-        // @RequestBody dice a Spring di convertire il JSON in ingresso nell'oggetto FunctionSpec
+        // @RequestBody indica a Spring di convertire il JSON della richiesta HTTP nell'oggetto FunctionSpec
 
-        // proviamo subito a salvare la funzione
-        // Il metodo registerFunction restituisce un valore booleano
-        // Se la funzione esiste già nel registro, restituiamo un errore 409 (Conflict)
+        // PASSO 1: Validazione delle invarianti di dominio (Rich Domain Model / Information Expert)
+        // Interroghiamo direttamente FunctionSpec per verificare se la configurazione è valida
+        if (!functionSpec.hasValidConfiguration()) {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+
+        // PASSO 2: Verifica di conflitti nel registro H2
+        // Se una funzione con questo nome è già registrata, restituiamo 409 (Conflict)
         if (registry.existsFunction(functionSpec.getName())) {
             return new ResponseEntity<>(HttpStatus.CONFLICT);
         }
-        // Creiamo il container su docker, ci vuole un pò perché sta facendo un ciclo
-        boolean container_docker = swarmProvider.deploy(functionSpec);
 
-        if (!container_docker) {
+        // PASSO 3: Creazione e attesa di avvio del container su Docker Swarm
+        boolean isServiceSuccessfullyDeployed = functionProvider.deploy(functionSpec);
+
+        if (!isServiceSuccessfullyDeployed) {
+            // Se il deploy infrastrutturale fallisce, non persistiamo nulla su database per evitare inconsistenze
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-            // Se non riusciamo a creare il container allora c'è un problema
-            // Ovviamente prima cancelliamo la funzione salvato nel registry per
         } else {
+            // PASSO 4: Persistenza a deploy completato (Pattern "Check prima di Salvare")
             registry.registerOrSaveFunction(functionSpec);
             return new ResponseEntity<>(functionSpec, HttpStatus.CREATED);
         }
-        // Se siamo arrivati qui allora tutto apposto, l'oggetto è stato salvato
-        // Restituiamo 201 (Created) con l'oggetto salvato
     }
 
     // endpoint di invocazione della funzione (su nanofaas vero ci si collega ad altri moduli, qua semplifichiamo le cose)
@@ -69,7 +73,7 @@ public class FunctionController {
     public ResponseEntity<String> delete(@PathVariable("name") String name) {
         if (registry.existsFunction(name)) {
             // Pigliamo la function spec da H2
-            if (!swarmProvider.remove(name)) {
+            if (!functionProvider.remove(name)) {
                 return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
             } else {
                 // Cancelliamo la funzione da H2
@@ -80,22 +84,35 @@ public class FunctionController {
     }
 
 
-    // Un esempio di chiamata sarà .../{name}/scale?replicas=3
+    // Esempio di invocazione HTTP: POST /v1/functions/{name}/scale?replicas=3
     @PostMapping("/{name}/scale")
-    public ResponseEntity<String> update(@PathVariable("name") String name, @RequestParam int replicas) {
+    public ResponseEntity<String> update(
+            @PathVariable("name") String name,
+            @RequestParam(name = "replicas") int desiredNumberOfReplicas
+    ) {
+        // Validazione preliminare dei parametri: non consentiamo un numero negativo di repliche
+        if (desiredNumberOfReplicas < 0) {
+            return new ResponseEntity<>("Il numero di repliche non può essere negativo.", HttpStatus.BAD_REQUEST);
+        }
 
-        // Funzione esiste nel registry?
-        if (registry.existsFunction(name)) {
-            // Aggiorniamo swarm
-            if (!swarmProvider.scale(name, replicas)) {
-                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-            } else {
-                // Aggiorniamo H2
-                if(registry.updateReplicas(name, replicas)) {
-                    return new ResponseEntity<>(HttpStatus.OK);
-                } else return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-            }
-        } return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        // Verifichiamo se la funzione esiste nel registro H2
+        if (!registry.existsFunction(name)) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        // PASSO 1: Aggiorniamo il numero di repliche su Docker Swarm
+        boolean isSwarmScaleSuccessful = functionProvider.scale(name, desiredNumberOfReplicas);
+        if (!isSwarmScaleSuccessful) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        // PASSO 2: Sincronizziamo lo stato aggiornato nel catalogo H2
+        boolean isRegistryUpdated = registry.updateReplicas(name, desiredNumberOfReplicas);
+        if (isRegistryUpdated) {
+            return new ResponseEntity<>(HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
     }
 
 }

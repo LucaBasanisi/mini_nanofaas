@@ -7,20 +7,16 @@ import org.springframework.stereotype.Service;
 
 
 /**
- * Gestore del ciclo di vita dei servizi all'interno del cluster Docker Swarm.
- *
- * Responsabilità:
- * 1. Orchestrazione del deploy di una funzione:
+ * Docker Swarm.
  *    - Delega la creazione del servizio Docker CLI a {@link DockerCliClient}.
  *    - Delega la verifica dello stato di avvio e salute a {@link FunctionHealthChecker}.
- *
- * Grazie alla separazione delle responsabilità (Separation of Concerns):
  * - Non ci sono chiamate a ProcessBuilder di basso livello in questa classe.
  * - Non ci sono loop bloccanti 'while' o 'Thread.sleep()' per il controllo di readiness.
  * - È facilmente testabile con test JUnit isolando le dipendenze tramite mock.
  */
+
 @Service
-public class SwarmProvider {
+public class SwarmProvider implements ProviderFunzione {
 
     private static final Logger log = LoggerFactory.getLogger(SwarmProvider.class);
 
@@ -44,6 +40,7 @@ public class SwarmProvider {
      * @param function Specifica della funzione da deployare (nome, immagine, repliche, ecc.)
      * @return true se il servizio è stato creato con successo ed è pronto a ricevere traffico, false altrimenti.
      */
+    @Override
     public boolean deploy(FunctionSpec function) {
         String serviceName = getServiceName(function.getName());
         log.info("Avvio del deploy per la funzione '{}' (immagine: {}, repliche: {})",
@@ -67,11 +64,13 @@ public class SwarmProvider {
         return healthChecker.checkReadiness(function.getName());
     }
 
+    @Override
     public boolean remove(String functionName) {
         String serviceName = getServiceName(functionName);
         return dockerCliClient.removeService(serviceName);
     }
 
+    @Override
     public boolean scale(String functionName, int replicas) {
         String serviceName = getServiceName(functionName);
         return dockerCliClient.scaleService(serviceName, replicas);

@@ -34,14 +34,22 @@ public class FunctionRegistry {
         repository.deleteById(functionName);
     }
 
-    // aggiorniamo il database dopo aver scalato le repliche
-    // Non vogliamo un numero di repliche diverso
-    public boolean updateReplicas(String functionName, int replicas) {
-        Optional<FunctionSpec> funzione = repository.findById(functionName);
-        if (funzione.isPresent()) {
-            FunctionSpec spec = funzione.get();
-            spec.setReplicas(replicas);
-            repository.save(spec);
+    /**
+     * Aggiorna lo stato delle repliche nel database H2 dopo l'avvenuto scaling su Docker Swarm.
+     * Applica la tecnica Move Method delegando a {@link FunctionSpec#updateReplicaCount(int)}
+     * la mutazione protetta del valore invece di manipolare campi grezzi dall'esterno.
+     *
+     * @param functionName Nome identificativo univoco della funzione da aggiornare
+     * @param newNumberOfReplicas Nuovo numero di container desiderato
+     * @return true se la funzione è presente nel registro ed è stata aggiornata, false altrimenti
+     */
+    public boolean updateReplicas(String functionName, int newNumberOfReplicas) {
+        Optional<FunctionSpec> optionalFunctionSpecification = repository.findById(functionName);
+        if (optionalFunctionSpecification.isPresent()) {
+            FunctionSpec functionSpecification = optionalFunctionSpecification.get();
+            // Deleghiamo a FunctionSpec la mutazione protetta delle repliche (Rich Domain Model)
+            functionSpecification.updateReplicaCount(newNumberOfReplicas);
+            repository.save(functionSpecification);
             return true;
         }
         return false;

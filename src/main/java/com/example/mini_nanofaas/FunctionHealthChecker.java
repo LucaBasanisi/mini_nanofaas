@@ -46,7 +46,8 @@ public class FunctionHealthChecker {
             backoff = @Backoff(delay = 500)
     )
     public boolean checkReadiness(String functionName) {
-        String url = "http://fn-" + functionName + ":8080/health";
+        String url = FunctionSpec.healthUrlFor(functionName);
+        String serviceName = FunctionSpec.serviceNameFor(functionName);
         log.debug("Verifica readiness per la funzione '{}' su {}", functionName, url);
 
         try {
@@ -57,13 +58,13 @@ public class FunctionHealthChecker {
                     .toBodilessEntity();
 
             if (response.getStatusCode().is2xxSuccessful()) {
-                log.info("Container 'fn-{}' è pronto e risponde correttamente (HTTP 2xx).", functionName);
+                log.info("Container '{}' è pronto e risponde correttamente (HTTP 2xx).", serviceName);
                 return true;
             }
         } catch (Exception e) {
             // Qualsiasi errore di rete (es. Connection Refused o Timeout) indica
             // che il container sta ancora avviandosi.
-            log.debug("Container 'fn-{}' non ancora raggiungibile: {}", functionName, e.getMessage());
+            log.debug("Container '{}' non ancora raggiungibile: {}", serviceName, e.getMessage());
         }
 
         // Se non abbiamo ottenuto una risposta 2xx, lanciamo l'eccezione per attivare il retry di Spring
@@ -80,7 +81,7 @@ public class FunctionHealthChecker {
      */
     @Recover
     public boolean recover(ContainerNotReadyException e, String functionName) {
-        log.warn("Readiness check fallito per 'fn-{}': superato il numero massimo di tentativi.", functionName);
+        log.warn("Readiness check fallito per '{}': superato il numero massimo di tentativi.", FunctionSpec.serviceNameFor(functionName));
         return false;
     }
 }

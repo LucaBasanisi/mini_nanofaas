@@ -93,14 +93,18 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - [x] Coordinamento del ciclo di vita in `SwarmProvider`: incapsulamento della convenzione di naming con prefisso `fn-` (`remove` e `scale`).
   - [x] Sincronizzazione atomica dello stato in `FunctionRegistry`: cancellazione tramite `deleteById` e aggiornamento repliche in-place su H2 (`updateReplicas` con `findById` e `save`).
   - [x] Esposizione endpoint REST in `FunctionController`: `DELETE /v1/functions/{name}` e `POST /v1/functions/{name}/scale?replicas={n}` con corretta gestione degli status code HTTP (`200 OK`, `404 Not Found`, `500 Internal Server Error`).
-- [ ] **Passo 3.4 (Sessione Refactoring IntelliJ #2 - Architettura, Design Pattern & Astrazioni)**:
-  - *Obiettivo*: Riorganizzare l'architettura man mano che cresce la complessità, introducendo pattern architetturali puliti grazie ai refactoring avanzati di IntelliJ IDEA.
-  - *Funzionalità e shortcut IntelliJ*:
-    - **Extract Interface / Superclass**: estrarre un'interfaccia da `SwarmProvider` (es. `ContainerOrchestrator` o `FunctionProvider`) per preparare il codice all'eventuale supporto di altri backend o mock di test.
-    - **Move Members / Move Class** (`F6`): spostamento pulito di classi ed entità verso package dedicati (es. `controller`, `service`, `provider`, `model`) lasciando che IntelliJ aggiorni tutti gli import e le dipendenze.
-    - **Change Signature** (`Ctrl + F6`): modificare firme di metodi (aggiunta/rimozione parametri, eccezioni, ritorni) con aggiornamento automatico di tutti i punti di chiamata.
-    - **Refactor This** (`Ctrl + Alt + Shift + T`): menu contestuale rapido di refactoring per valutare e applicare la trasformazione adatta in qualsiasi punto del codice.
-    - **Safe Delete** (`Alt + Delete`): rimozione sicura di codice morto o residui di vecchie implementazioni con controllo preventivo dei riferimenti.
+- [x] **Passo 3.4 (Sessione Refactoring #2 - Analisi e Progettazione del Software: Code Smells & Design Pattern)**:
+  - [x] **Debellamento Shotgun Surgery & Information Expert (GRASP)**:
+    - Centralizzazione delle costanti di naming (`fn-`) e di routing (`/health`, `/invoke`, porta `8080`) direttamente dentro `FunctionSpec`.
+    - Eliminazione del calcolo duplicato di stringhe e prefissi in `SwarmProvider`, `FunctionHealthChecker` e `FunctionDispatcher`.
+  - [x] **Cura dello Code Smell "Data Class" (Martin Fowler)**:
+    - Trasformazione di `FunctionSpec` da *Anemic Domain Model* (semplice DTO passivo) a *Rich Domain Model*.
+    - Applicazione della tecnica **Move Method**: introduzione di `updateReplicaCount(int)` e `hasValidConfiguration()` per proteggere le invarianti di dominio (no repliche negative, stringhe non vuote, timeout strettamente positivo).
+    - Aggiornamento di `FunctionRegistry` e `FunctionController` per delegare la validazione e la mutazione a `FunctionSpec`.
+    - Suite di test unitari dedicata: `FunctionSpecTest.java` con JUnit 5 a protezione dei comportamenti osservabili.
+  - [x] **Extract Interface & Dependency Inversion Principle (DIP / SOLID)**:
+    - Estrazione dell'interfaccia `ProviderFunzione` da `SwarmProvider` con il contratto minimale di ciclo di vita (`deploy`, `remove`, `scale`).
+    - Disaccoppiamento di `FunctionController` dal provider concreto Docker Swarm: il controller dipende ora unicamente dall'astrazione (`ProviderFunzione`), predisponendo l'architettura all'Open/Closed Principle (supporto trasparente a futuri provider come Kubernetes o Mock tramite `@ConditionalOnProperty`).
 
 ---
 
@@ -320,6 +324,17 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
     - **Stateless vs Stateful FaaS**: nei sistemi FaaS canonici i container sono effimeri e privi di memoria; nei sistemi stateful il container è solo un'unità di computazione rimpiazzabile, mentre l'identità e lo stato risiedono in un cluster DDBMS condiviso, distribuito e replicato.
     - **State Rehydration**: alla ripartenza di una funzione su un nuovo nodo Swarm dopo la morte del worker precedente, il runtime esegue una query di reidratazione caricando l'ultimo snapshot valido e il Write-Ahead Log (WAL) prima di accettare traffico.
     - **Fencing Tokens & Partizioni di Rete**: in caso di isolamento parziale di rete, Swarm potrebbe avviare un nuovo container credendo che il vecchio sia morto (grey failure); i Fencing Token (contatori monotonici verificati dal DDBMS) garantiscono che solo l'istanza con il lease attivo possa scrivere sul database, neutralizzando tentativi di scrittura da nodi zombie e prevenendo split-brain.
+
+23. **Analisi e Progettazione del Software: Code Smells & Refactoring Avanzato**:
+    - **Shotgun Surgery vs Divergent Change (Martin Fowler)**:
+      - *Shotgun Surgery*: una singola decisione di dominio (es. prefisso container `fn-`, porte di rete o URL) costringe a modificare molte classi diverse. Si risolve identificando l'**Information Expert (GRASP)** e accentrando costanti e regole di calcolo (es. in `FunctionSpec`).
+      - *Divergent Change*: una singola classe cambia continuamente per motivi disparati (violazione dell'SRP).
+    - **Data Class vs Rich Domain Model**:
+      - Una classe con soli campi, getter e setter passivi rappresenta lo smell *Data Class* e induce *Feature Envy* nelle classi che la manipolano.
+      - Applicando la tecnica **Move Method**, si spostano la validazione delle invarianti (`hasValidConfiguration`) e le mutazioni protette di business (`updateReplicaCount`) dentro la classe stessa, impedendo stati invalidi o incoerenti a runtime.
+    - **Dependency Inversion Principle (DIP) & Extract Interface**:
+      - I componenti di alto livello (`FunctionController`) non devono dipendere da dettagli di basso livello (`SwarmProvider`), ma da un'astrazione (`ProviderFunzione`).
+      - *Gestione di implementazioni multiple in Spring Boot*: l'aggiunta di ulteriori provider (es. Kubernetes) viene gestita in modo disaccoppiato tramite `@ConditionalOnProperty(name = "nanofaas.provider", havingValue = "...")` o profili `@Profile`, preservando l'Open/Closed Principle (OCP) ed evitando `NoUniqueBeanDefinitionException`.
 
 ---
 
