@@ -183,6 +183,7 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 - [ ] **Passo 7.1 (Topologia Swarm Multi-Nodo & Cluster DDBMS Replicato)**:
   - Estensione dell'ambiente locale con Multipass per creare un cluster Docker Swarm multi-nodo (1 Manager + 2 Worker collegati su `nanofaas-net`).
   - Deployment di un engine DDBMS distribuito su Swarm con replica attiva e tolleranza ai partizionamenti (es. cluster Redis Sentinel / Redis Cluster con replica master-replica e persistenza AOF su volumi indipendenti, oppure store distribuito basato su Raft come TiKV/etcd).
+  - Bisogna approfondire anche altre soluzioni, come: Xata e StarbaseDB, anche se forse è meglio per rendere le funzioni non più effimere (che ora non centra nulla). Inoltre sono soluzioni non totalmente open-source oppure richiedono iscrizioni a servizi terzi. Sarebbe comunque figo implementare da zero una cosa del genere e renderla open-source.
   - Definizione del modello di consistenza distribuita (Quorum writes, Read-Your-Writes e durability guarantees).
 - [ ] **Passo 7.2 (Pattern Stateful Functions & Checkpointing / Write-Ahead Logging)**:
   - Definizione del ciclo di vita dello stato della funzione: astrazione di *Stateful Entity / Virtual Actor* (chiave di partizionamento per-funzione o per-istanza: `fn:<name>:<key>`).
