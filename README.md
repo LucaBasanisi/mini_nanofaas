@@ -87,9 +87,11 @@ Lo sviluppo è tracciato dettagliatamente all'interno di [ROADMAP.md](ROADMAP.md
 
 - [x] **Fase 1**: Core Control Plane (API REST, Dispatcher, Registry H2/JPA, Metriche Prometheus, Pipeline CI).
 - [x] **Fase 2**: Provisioning VM con Multipass & `cloud-init`, Dockerfile multi-stage, Pipeline CD su GHCR e deploy su Docker Swarm.
-- [ ] **Fase 3 (In corso)**: Implementazione dello Swarm Provider (deploy container con `ProcessBuilder`, readiness check, scaling e rimozione).
+- [x] **Fase 3**: Swarm Provider completo (deploy container, readiness check, scaling, rimozione e refactoring con Dependency Inversion & Rich Domain Model).
 - [ ] **Fase 4**: Deploy server Prometheus, container funzione demo e CLI Python per sviluppatori.
-- [ ] **Fase Futura**: Stateful Serverless via Watchdog sidecar in Rust con storage di stato distribuito su Redis.
+- [ ] **Fase 5**: Serverless Workflow Engine & Reti di Petri (WF-Nets, Verifica Formale di Soundness & Pre-warming Predittivo).
+- [ ] **Fase 6**: Resilienza Distribuita, Concorrenza & Consistenza Eventuale Swarm/Database.
+- [ ] **Fase 7**: Stateful Serverless via Watchdog sidecar in Rust con storage di stato distribuito su Redis.
 
 ---
 
@@ -193,3 +195,19 @@ curl -X POST http://localhost:8080/v1/functions/greeter:invoke \
   -H "Content-Type: text/plain" \
   -d "Ciao Mondo"
 ```
+
+---
+
+## 📚 Generazione Documentazione & Fonti per NotebookLM
+
+Il repository include uno script per estrarre la codebase e la documentazione in formato Markdown deterministico, ideale per essere caricato come fonte su **Google NotebookLM** (per generare quiz, flashcard e guide di studio sull'architettura del progetto):
+
+```bash
+./generate_docs.py
+# oppure: python3 generate_docs.py
+```
+
+I file generati vengono salvati in `docs/notebookllm/`:
+- `codebase_full.md`: include il codice sorgente completo e i documenti Markdown di specifica.
+- `codebase_compressed.md`: contiene l'albero e le sole firme sintetiche di classi, interfacce e metodi (via AST con Repomix Tree-sitter).
+

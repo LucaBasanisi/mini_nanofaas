@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/yamadashy/repomix/main/repomix.schema.json",
+  "output": {
+    "filePath": "docs/notebookllm/codebase_overview.md",
+    "style": "markdown",
+    "parsableStyle": false,
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeComments": false,
+    "removeEmptyLines": true,
+    "topFilesLength": 10,
+    "showLineNumbers": false,
+    "copyToClipboard": false
+  },
+  "include": [
+    "src/main/**/*.java",
+    "src/main/resources/**/*.properties",
+    "src/main/resources/**/*.yml",
+    "src/main/resources/**/*.yaml",
+    "build.gradle",
+    "Dockerfile",
+    "README.md",
+    "ROADMAP.md",
+    "OttimizzaFunzioni.md"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/build/**",
+      "**/.gradle/**",
+      "**/gradlew*",
+      "**/*.iml",
+      "**/.idea/**",
+      "docs/**"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  }
+}
