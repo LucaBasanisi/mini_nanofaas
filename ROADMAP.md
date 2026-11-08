@@ -219,6 +219,18 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 - [ ] **Passo 8.3 (Concurrency Fuzzing & Stress Test sotto Carico Massivo)**:
   - Test di carico ad alta concorrenza (es. con script Python / k6 / wrk): bombardamento simultaneo di `register`, `scale`, `delete` e `invoke` su centinaia di thread paralleli con mutazioni di stato continue.
   - Verifica della tenuta dei lock e delle transazioni DDBMS: assenza di deadlock nel Control Plane, persistenza integra in H2 e nel DDBMS (nessun dato corrotto o record fantasma).
+- [ ] **Passo 8.3-bis (Edge Concurrency Benchmark & Graceful Degradation: Docker Swarm vs Hardware Arduino/ESP32)**:
+  - *Obiettivo*: Benchmark comparativo quantitativo tra funzioni containerizzate scalabili orizzontalmente su Swarm e funzioni embedded bare-metal ospitate su microcontrollore fisico (Arduino / ESP32).
+  - *Setup Eterogeneo*:
+    - Registrazione nel Control Plane di un worker esterno/edge via URL statico (`STATIC_HTTP` / `targetUrl` puntato all'IP dell'Arduino/ESP32 su rete locale).
+    - Deploy su Swarm della corrispettiva funzione speculare su container Docker.
+    - Firmware Arduino/ESP32 minimale con web server embedded che espone `/health` e `/invoke`.
+  - *Carico & Misurazioni (tramite k6 / wrk e metriche Prometheus `fn_duration_seconds`)*:
+    - Iniezione di carico concorrente crescente (da 1 a 100 richieste concorrenti).
+    - Analisi del punto di rottura: misurazione del throughput (RPS), latenza (p50, p95, p99) e tasso di fallimento dei socket TCP sul microcontrollore (Connection Refused vs Timeout).
+  - *Resilienza & Graceful Degradation sul Control Plane*:
+    - Protezione dell'hardware con **Circuit Breaker** (es. Resilience4j) o Rate Limiting per evitare il crash fisico da saturazione buffer di Arduino.
+    - Implementazione di policy di **Fallback con Caching**: restituzione dell'ultimo dato sensoristico valido memorizzato in cache quando Arduino non risponde o il Circuit Breaker è aperto (*Half-Open/Open*).
 - [ ] **Passo 8.4 (Crash & Cold Recovery del Control Plane)**:
   - Simulazione di riavvio improvviso del nodo manager o crash del Control Plane (`kill -9`) durante operazioni intensive di scale o registrazione.
   - Bootstrap recovery: all'avvio successivo, il Control Plane deve re-sincronizzare lo stato H2 con Swarm e col DDBMS senza cancellare per errore servizi attivi e sani.
@@ -378,6 +390,11 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
     - **Limiti delle FSM nei Workflow Concorrenti**: le macchine a stati tradizionali (es. AWS Step Functions / ASL) soffrono di complessità ed esplosione combinatoria quando devono orchestrare rami paralleli asincroni (Fork/Join). Le Reti di Petri modellano la concorrenza distribuita in modo nativo tramite marcature locali e gettoni (tokens).
     - **Teoria della Soundness (Correttezza Formale)**: una WF-Net è *Sound* se e solo se garantisce terminazione pulita (nessun token residuo), assenza di deadlock (lo stato finale è sempre raggiungibile) e assenza di transizioni morte. Verificare la Soundness a tempo di deploy impedisce bug logici, corse critiche o fork-bomb prima dell'avvio dei container.
     - **Pre-warming Predittivo basato sulla Marcatura**: conoscendo la topologia della rete e la marcatura corrente, il Control Plane può anticipare deterministicamente quali funzioni diventeranno abilitate al firing, pre-riscaldando i container (`scale(1)`) durante il calcolo dello step precedente e azzerando il cold start.
+
+25. **Edge Serverless & Microcontrollori: Concorrenza Eterogenea e Graceful Degradation**:
+    - **Disparità di Risorse (Container vs Bare-Metal MCU)**: i container su Docker Swarm possono scalare orizzontalmente aumentando le repliche e sfruttare thread pool ampi; un microcontrollore (Arduino/ESP32) possiede memoria limitata (SRAM) e un numero esiguo di socket TCP concorrenti (tipicamente 4-8 simultanei).
+    - **Saturazione Hardware & Socket Starvation**: sotto carico massivo, il microcontrollore non va solo incontro a latenze elevate, ma incorre in buffer overflow di rete e *Connection Refused* o crash del chip Wi-Fi per esaurimento heap.
+    - **Graceful Degradation con Circuit Breaker & Caching Fallback**: l'introduzione di un Circuit Breaker (es. Resilience4j) nel Control Plane protegge l'hardware fragile tagliando le connessioni dirette quando la failure rate supera una determinata soglia; l'accoppiamento con una cache locale restituisce l'ultima lettura valida (es. dati dei sensori), garantendo continuità di servizio al client (`200 OK` degradato) senza affondare il microcontrollore.
 
 ---
 
