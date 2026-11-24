@@ -76,10 +76,10 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - *Trigger controllato*: integrato nel workflow CD esistente (`docker-publish.yml`) su tag di versione (`v*.*.*`) e `workflow_dispatch` (manuale), evitando esecuzioni continue ad ogni commit intermedio su master.
   - *Generazione Diagramma delle Classi (UMLDoclet + PlantUML)*: configurazione task Gradle con `nl.talsmasoftware:umldoclet` per estrarre le relazioni strutturali direttamente dal bytecode/JavaDoc in formato PlantUML (`.puml`).
   - *Generazione Diagramma C4 dei Componenti (Structurizr Java)*: scansione statica delle annotazioni Spring (`@RestController`, `@Service`, `@Repository`) tramite `SpringComponentFinderStrategy` ed esportazione automatica in standard C4-PlantUML.
-  - *Rendering & Auto-commit*: compilazione in `.svg` via PlantUML CLI e commit automatico su Git dei diagrammi e del [`README.md`](file:///home/luca/IdeaProjects/mini_nanofaas/README.md) aggiornato prima del build Docker.
+  - *Rendering & Auto-commit*: compilazione in `.svg` via PlantUML CLI e commit automatico su Git dei diagrammi e del [`README.md`](../../README.md) aggiornato prima del build Docker.
 - [x] **Passo 2.6 (Tooling Didattico & Export Fonti per NotebookLM)**:
   - Creazione configurazione deterministica con `repomix` (`repomix.config.json`) per impacchettare codice sorgente Java, configurazioni e markdown escludendo artifact binari e directory build/IDE.
-  - Creazione dello script Python [`generate_docs.py`](file:///home/luca/IdeaProjects/mini_nanofaas/generate_docs.py) per la generazione automatica di `docs/notebookllm/codebase_full.md` e `docs/notebookllm/codebase_compressed.md` (con compressione AST Tree-sitter), pronti per generare flashcard e quiz su NotebookLM.
+  - Creazione dello script Python [`generate_docs.py`](../../generate_docs.py) per la generazione automatica di `docs/notebookllm/codebase_full.md` e `docs/notebookllm/codebase_compressed.md` (con compressione AST Tree-sitter), pronti per generare flashcard e quiz su NotebookLM.
 
 ---
 

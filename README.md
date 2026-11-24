@@ -128,7 +128,7 @@ Esempio per funzione **containerizzata Docker Swarm**:
 
 ## 🧭 Roadmap di Sviluppo
 
-Lo sviluppo è tracciato dettagliatamente all'interno di [ROADMAP.md](ROADMAP.md):
+La [roadmap di sviluppo](docs/sviluppo/ROADMAP.md) descrive le fasi del progetto. La consegna del corso, il piano per la GUI e gli appunti tecnici sono raccolti nell’[indice della documentazione](docs/README.md).
 
 - [x] **Fase 1**: Core Control Plane (API REST, Dispatcher, Registry H2/JPA, Metriche Prometheus, Pipeline CI).
 - [x] **Fase 2**: Provisioning VM con Multipass & `cloud-init`, Dockerfile multi-stage, Pipeline CD su GHCR, deploy su Docker Swarm ed export NotebookLM.

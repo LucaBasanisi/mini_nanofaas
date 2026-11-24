@@ -20,8 +20,8 @@
     "build.gradle",
     "Dockerfile",
     "README.md",
-    "ROADMAP.md",
-    "OttimizzaFunzioni.md"
+    "docs/sviluppo/ROADMAP.md",
+    "docs/sviluppo/OttimizzaFunzioni.md"
   ],
   "ignore": {
     "useGitignore": true,
@@ -32,7 +32,7 @@
       "**/gradlew*",
       "**/*.iml",
       "**/.idea/**",
-      "docs/**"
+      "docs/notebookllm/**"
     ]
   },
   "security": {
