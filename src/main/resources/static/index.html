@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mini_nanofaas — Console</title>
+    <style>
+        /* Invariante tema: questi token CSS non governano il <canvas> #latencyChart;
+           drawLatencyChart() duplica i colori come hex hardcoded in JS. */
+        :root {
+            --bg: #0b1120;
+            --surface: #131c31;
+            --surface-2: #1c2842;
+            --border: #263554;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --warning: #f59e0b;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1220px;
+            margin: 0 auto;
+            padding: 1.75rem 1.25rem 3rem;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.55rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        h1 span { color: var(--accent); }
+
+        .subtitle {
+            margin: 0.25rem 0 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 390px 1fr;
+            gap: 1.25rem;
+            align-items: start;
+        }
+
+        @media (max-width: 960px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+
+        .stack {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.35rem;
+        }
+
+        .card h2 {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 650;
+        }
+
+        .card-desc {
+            margin: 0 0 1rem;
+            color: var(--muted);
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--muted);
+            margin-bottom: 0.35rem;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            margin-bottom: 0.85rem;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.88rem;
+            font-family: inherit;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: 2px solid var(--accent);
+            border-color: transparent;
+        }
+
+        textarea.mono {
+            resize: vertical;
+            line-height: 1.45;
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .chip {
+            background: var(--surface-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.28rem 0.65rem;
+            font-size: 0.76rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+
+        .chip:hover {
+            border-color: var(--accent);
+            background: rgba(56, 189, 248, 0.12);
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            padding: 0.55rem 0.9rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.15s ease, opacity 0.15s ease;
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #082f49;
+            width: 100%;
+        }
+        .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+        .btn-secondary {
+            background: var(--surface-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover:not(:disabled) { background: var(--border); }
+
+        .btn-success {
+            background: rgba(34, 197, 94, 0.16);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+        }
+        .btn-success:hover:not(:disabled) { background: rgba(34, 197, 94, 0.28); }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.16);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+        .btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+
+        .btn-sm {
+            padding: 0.32rem 0.6rem;
+            font-size: 0.78rem;
+            border-radius: 6px;
+        }
+
+        .status-banner {
+            display: none;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.15rem;
+            font-size: 0.88rem;
+            border: 1px solid transparent;
+        }
+        .status-banner.ok {
+            display: block;
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #86efac;
+        }
+        .status-banner.err {
+            display: block;
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+
+        details {
+            margin-bottom: 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            background: rgba(11, 17, 32, 0.45);
+        }
+
+        summary {
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: var(--muted);
+            user-select: none;
+        }
+
+        details[open] summary {
+            margin-bottom: 0.6rem;
+            color: var(--text);
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .search-input {
+            width: 175px;
+            margin: 0;
+            padding: 0.35rem 0.6rem;
+            font-size: 0.8rem;
+        }
+
+        .toggle-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin: 0;
+            font-size: 0.8rem;
+            color: var(--muted);
+            cursor: pointer;
+        }
+
+        .toggle-label input {
+            width: auto;
+            margin: 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.74rem;
+            font-weight: 600;
+        }
+
+        .badge-active {
+            background: rgba(34, 197, 94, 0.14);
+            color: #86efac;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .badge-inactive {
+            background: rgba(148, 163, 184, 0.14);
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+
+        .badge-count {
+            background: var(--surface-2);
+            color: var(--accent);
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.86rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.65rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 0.74rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.82rem;
+        }
+
+        .scale-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .scale-box .rep-num {
+            min-width: 24px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+
+        .empty {
+            color: var(--muted);
+            text-align: center;
+            padding: 1.5rem 0;
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.9rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .output-header label { margin: 0; }
+
+        pre {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.8rem;
+            overflow-x: auto;
+            font-size: 0.83rem;
+            margin: 0;
+            min-height: 3rem;
+            color: #e2e8f0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        dialog {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            max-width: 660px;
+            width: 92%;
+            padding: 1.25rem;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        dialog::backdrop {
+            background: rgba(5, 8, 18, 0.72);
+            backdrop-filter: blur(2px);
+        }
+
+        .hint {
+            font-size: 0.76rem;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div>
+            <h1><span>mini_nanofaas</span> Console</h1>
+            <p class="subtitle">Piattaforma FaaS locale per registrare, scalare, invocare e monitorare funzioni Java.</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn-secondary" type="button" onclick="loadFunctions()">Aggiorna lista</button>
+        </div>
+    </header>
+
+    <div id="statusBanner" class="status-banner" role="status"></div>
+
+    <div class="grid">
+        <!-- RIQUADRO 1: REGISTRAZIONE -->
+        <section class="card">
+            <div class="card-header">
+                <h2>Registra Funzione</h2>
+            </div>
+            <p class="card-desc">
+                Scrivi una funzione Java con il metodo <code class="mono">handle(String input)</code> e deployala subito.
+                Usa un esempio rapido per compilare i campi in un clic.
+            </p>
+
+            <label>Esempi pronti (1 clic)</label>
+            <div class="chips">
+                <button type="button" class="chip" onclick="applyPreset('saluta')">Saluta</button>
+                <button type="button" class="chip" onclick="applyPreset('maiuscolo')">Maiuscolo</button>
+                <button type="button" class="chip" onclick="applyPreset('conta')">Analizza testo</button>
+                <button type="button" class="chip" onclick="applyPreset('timeout')">Simula Timeout</button>
+            </div>
+
+            <form id="registerForm">
+                <label for="fnName">Nome funzione</label>
+                <input id="fnName" name="name" type="text" placeholder="es. saluta" required>
+
+                <!-- Vincolo GUI vs backend: l'attributo HTML required su #fnCode blocca la registrazione
+                     di funzioni solo-Docker dalla UI, anche se FunctionSpec.hasValidConfiguration()
+                     accetta sourceCode vuoto con imageDigest valorizzato (e il JS forza 'inline-java'). -->
+                <label for="fnCode">Codice Java (<code class="mono">public static String handle(String input)</code>)</label>
+                <textarea id="fnCode" name="sourceCode" rows="9" class="mono" spellcheck="false" required></textarea>
+
+                <div class="row-2">
+                    <div>
+                        <label for="fnReplicas">Repliche iniziali</label>
+                        <input id="fnReplicas" name="replicas" type="number" min="0" value="1" required>
+                    </div>
+                    <div>
+                        <label for="fnTimeout">Timeout (sec)</label>
+                        <input id="fnTimeout" name="timeoutSeconds" type="number" min="1" value="5" required>
+                    </div>
+                </div>
+
+                <details>
+                    <summary>Opzioni avanzate (Immagine Docker)</summary>
+                    <label for="fnImage">Immagine Docker (usata solo in modalità Swarm o come riferimento)</label>
+                    <input id="fnImage" name="imageDigest" type="text" placeholder="inline-java" style="margin-bottom: 0.25rem;">
+                </details>
+
+                <button id="registerBtn" class="btn-primary" type="submit">Registra e Deploya</button>
+            </form>
+        </section>
+
+        <div class="stack">
+            <!-- RIQUADRO 2: FUNZIONI ATTIVE -->
+            <section class="card">
+                <div class="card-header">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <h2>Funzioni</h2>
+                        <span id="fnCount" class="badge badge-count mono">0</span>
+                    </div>
+                    <div class="toolbar">
+                        <input id="filterInput" class="search-input" type="search" placeholder="Filtra per nome..." oninput="renderFunctions()">
+                        <!-- Deselezionato di default: renderFunctions() nasconde replicas <= 0. Dopo un timeout
+                             (HTTP 504 -> scale a 0 + loadFunctions), la funzione sparisce dalla tabella finché
+                             non si spunta questo toggle; #invokeSelect invece esclude sempre le funzioni a 0 repliche. -->
+                        <label class="toggle-label">
+                            <input id="showInactiveToggle" type="checkbox" onchange="renderFunctions()">
+                            Mostra inattive (0 repliche)
+                        </label>
+                    </div>
+                </div>
+                <p class="card-desc">
+                    Mostra le funzioni attive pronte all'esecuzione (repliche &gt; 0). Se una chiamata supera il timeout,
+                    la funzione resta salvata ma scende a 0 repliche e viene nascosta da questa tabella.
+                </p>
+
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Funzione</th>
+                            <th>Stato / Tipo</th>
+                            <th>Repliche</th>
+                            <th>Timeout</th>
+                            <th>Azioni</th>
+                        </tr>
+                        </thead>
+                        <tbody id="functionsBody">
+                        <tr><td colspan="5" class="empty">Caricamento...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- RIQUADRO 3: INVOCAZIONE -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>Invoca Funzione</h2>
+                    <span class="hint">Scorciatoia: <kbd>Ctrl</kbd> + <kbd>Invio</kbd></span>
+                </div>
+                <p class="card-desc">
+                    Seleziona una funzione attiva, inserisci un payload opzionale e lancia <code class="mono">:invoke</code>.
+                    L'ultima funzione registrata viene selezionata automaticamente.
+                </p>
+
+                <form id="invokeForm">
+                    <div class="row-2">
+                        <div>
+                            <label for="invokeSelect">Scegli dalla lista</label>
+                            <select id="invokeSelect" onchange="syncInvokeNameFromSelect()">
+                                <option value="">-- Seleziona funzione attiva --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="invokeName">Oppure scrivi il nome</label>
+                            <input id="invokeName" type="text" placeholder="es. saluta" required>
+                        </div>
+                    </div>
+
+                    <!-- Il payload è sempre inviato come text/plain (anche per il chip JSON). Bug latente
+                         sul chip JSON sotto: '\"' non fa escape di '"' in un attributo HTML doppio-apice,
+                         troncando onclick. La scorciatoia Ctrl/Cmd+Invio è collegata solo a #invokePayload. -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                        <label for="invokePayload" style="margin: 0;">Payload (opzionale)</label>
+                        <div class="chips" style="margin: 0;">
+                            <button type="button" class="chip" onclick="setPayload('Luca')">"Luca"</button>
+                            <button type="button" class="chip" onclick="setPayload('Ciao da mini_nanofaas')">Testo</button>
+                            <button type="button" class="chip" onclick="setPayload('{\"user\":\"luca\"}')">JSON</button>
+                            <button type="button" class="chip" onclick="setPayload('')">Svuota</button>
+                        </div>
+                    </div>
+                    <textarea id="invokePayload" rows="3" placeholder="Scrivi qui l'input passato al parametro 'input'..." style="margin-bottom: 0.75rem;"></textarea>
+
+                    <button id="invokeBtn" class="btn-primary" type="submit">Esegui (:invoke)</button>
+                </form>
+
+                <div class="output-header">
+                    <label for="invokeOutput">Output</label>
+                    <span id="invokeMeta" class="hint mono"></span>
+                </div>
+                <pre id="invokeOutput">Nessuna invocazione eseguita.</pre>
+            </section>
+
+            <!-- RIQUADRO 4: GRAFICO LATENZA -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>Latenza Invocazioni (ms)</h2>
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <span class="hint mono">ultime 20</span>
+                        <button class="btn-secondary btn-sm" type="button" onclick="clearChart()">Pulisci</button>
+                    </div>
+                </div>
+                <p class="card-desc">
+                    Grafico in tempo reale dei tempi di risposta delle invocazioni: barre verdi per successo (<code class="mono">200 OK</code>),
+                    barre rosse per errori o timeout.
+                </p>
+                <canvas id="latencyChart" height="130" style="width: 100%; display: block;"></canvas>
+            </section>
+        </div>
+    </div>
+</div>
+
+<dialog id="codeDialog">
+    <div class="card-header" style="margin-bottom: 0.75rem;">
+        <h2 id="dialogTitle">Codice Funzione</h2>
+        <button class="btn-secondary btn-sm" type="button" onclick="document.getElementById('codeDialog').close()">Chiudi</button>
+    </div>
+    <pre id="dialogCode" class="mono" style="max-height: 360px; margin-bottom: 0.85rem;"></pre>
+    <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+        <button class="btn-secondary btn-sm" type="button" onclick="copyCodeToEditor()">Carica nell'editor</button>
+    </div>
+</dialog>
+
+<script>
+    const API_BASE = '/v1/functions';
+    // La modale legge il sorgente dall'ultima GET del catalogo. Dopo una modifica da un'altra scheda serve un aggiornamento.
+    let allFunctions = [];
+    // Coda FIFO volatile in memoria della scheda (max 20 voci, inclusi errori HTTP/rete): si azzera al reload.
+    const invocationHistory = [];
+    let activeModalCode = '';
+
+    const PRESETS = {
+        saluta: {
+            name: 'saluta',
+            replicas: 1,
+            timeoutSeconds: 5,
+            code: `public class Function {
+    public static String handle(String input) {
+        String name = (input == null || input.isBlank()) ? "mondo" : input.trim();
+        return "Ciao, " + name + "!";
+    }
+}`
+        },
+        maiuscolo: {
+            name: 'maiuscolo',
+            replicas: 1,
+            timeoutSeconds: 5,
+            code: `public class Function {
+    public static String handle(String input) {
+        if (input == null || input.isBlank()) {
+            return "NESSUN INPUT";
+        }
+        return input.trim().toUpperCase();
+    }
+}`
+        },
+        conta: {
+            name: 'analizza-testo',
+            replicas: 1,
+            timeoutSeconds: 5,
+            code: `public class Function {
+    public static String handle(String input) {
+        String text = input == null ? "" : input.trim();
+        int chars = text.length();
+        int words = text.isEmpty() ? 0 : text.split("\\\\s+").length;
+        return "Caratteri: " + chars + " | Parole: " + words;
+    }
+}`
+        },
+        timeout: {
+            name: 'test-timeout',
+            replicas: 1,
+            timeoutSeconds: 2,
+            code: `public class Function {
+    public static String handle(String input) throws Exception {
+        Thread.sleep(4000);
+        return "Completata";
+    }
+}`
+        }
+    };
+
+    // Non azzera #fnImage nei dettagli avanzati: un eventuale imageDigest digitato in precedenza resta attivo.
+    function applyPreset(key) {
+        const preset = PRESETS[key];
+        if (!preset) return;
+        document.getElementById('fnName').value = preset.name;
+        document.getElementById('fnCode').value = preset.code;
+        document.getElementById('fnReplicas').value = preset.replicas;
+        document.getElementById('fnTimeout').value = preset.timeoutSeconds;
+        showStatus(`Preset "${preset.name}" caricato nell'editor.`);
+    }
+
+    function showStatus(message, isError = false) {
+        const banner = document.getElementById('statusBanner');
+        banner.textContent = message;
+        banner.className = 'status-banner ' + (isError ? 'err' : 'ok');
+    }
+
+    // Sicura per testo HTML e attributi tra doppi apici (value="..."), MA NON dentro stringhe JS in attributi onclick="...":
+    // il parser HTML decodifica &#39; in ' prima del parsing JS, rompendo nomi con apostrofo (vedi selectForInvoke).
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function setPayload(text) {
+        document.getElementById('invokePayload').value = text;
+    }
+
+    function syncInvokeNameFromSelect() {
+        const selected = document.getElementById('invokeSelect').value;
+        if (selected) {
+            document.getElementById('invokeName').value = selected;
+        }
+    }
+
+    // Popola #invokeSelect solo con funzioni attive (replicas > 0) senza mai svuotare #invokeName:
+    // se una funzione scende a 0 (scaling o timeout 504), sparisce dalla select ma #invokeName conserva il nome (nuovo :invoke -> HTTP 503).
+    function updateInvokeSelector() {
+        const select = document.getElementById('invokeSelect');
+        const currentInput = document.getElementById('invokeName').value.trim();
+        const active = allFunctions.filter(fn => fn.replicas > 0);
+
+        select.innerHTML = '<option value="">-- Seleziona funzione attiva --</option>' +
+            active.map(fn => `<option value="${escapeHtml(fn.name)}">${escapeHtml(fn.name)} (${fn.replicas} rep, ${fn.timeoutSeconds}s)</option>`).join('');
+
+        if (active.some(fn => fn.name === currentInput)) {
+            select.value = currentInput;
+        }
+    }
+
+    // Su errore HTTP/rete lascia invariata la cache allFunctions precedente; senza AbortController,
+    // chiamate ravvicinate possono risolversi fuori ordine se una fetch precedente è più lenta.
+    async function loadFunctions() {
+        try {
+            const res = await fetch(API_BASE);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            allFunctions = await res.json();
+            updateInvokeSelector();
+            renderFunctions();
+        } catch (err) {
+            showStatus('Errore nel caricamento delle funzioni: ' + err.message, true);
+        }
+    }
+
+    function renderFunctions() {
+        const tbody = document.getElementById('functionsBody');
+        const countEl = document.getElementById('fnCount');
+        const showInactive = document.getElementById('showInactiveToggle').checked;
+        const query = document.getElementById('filterInput').value.trim().toLowerCase();
+
+        const activeCount = allFunctions.filter(fn => fn.replicas > 0).length;
+        const inactiveCount = allFunctions.length - activeCount;
+        countEl.textContent = inactiveCount > 0 && !showInactive
+            ? `${activeCount} attive · ${inactiveCount} inattive`
+            : `${activeCount} attive`;
+
+        const visible = allFunctions.filter(fn => {
+            if (!showInactive && fn.replicas <= 0) return false;
+            if (query && !fn.name.toLowerCase().includes(query)) return false;
+            return true;
+        });
+
+        if (visible.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="empty">${
+                allFunctions.length === 0
+                    ? 'Nessuna funzione registrata. Usa un preset a sinistra per iniziare.'
+                    : 'Nessuna funzione visibile con i filtri correnti.'
+            }</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = visible.map(fn => {
+            const safeName = escapeHtml(fn.name);
+            const encodedName = encodeURIComponent(fn.name);
+            const isActive = fn.replicas > 0;
+            const statusBadge = isActive
+                ? '<span class="badge badge-active">Attiva</span>'
+                : '<span class="badge badge-inactive">Inattiva</span>';
+            const typeLabel = fn.sourceCode && fn.sourceCode.trim()
+                ? 'Java inline'
+                : escapeHtml(fn.imageDigest || 'docker');
+
+            return `
+                <tr>
+                    <td>
+                        <div class="mono"><strong>${safeName}</strong></div>
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+                            ${statusBadge}
+                            <span class="hint mono">${typeLabel}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="scale-box">
+                            <button class="btn-secondary btn-sm" type="button" title="Riduci repliche"
+                                onclick="scaleFunction('${encodedName}', ${Math.max(0, fn.replicas - 1)})" ${fn.replicas <= 0 ? 'disabled' : ''}>-</button>
+                            <span class="rep-num mono">${fn.replicas}</span>
+                            <button class="btn-secondary btn-sm" type="button" title="Aumenta repliche"
+                                onclick="scaleFunction('${encodedName}', ${fn.replicas + 1})">+</button>
+                        </div>
+                    </td>
+                    <td class="mono">${fn.timeoutSeconds}s</td>
+                    <td>
+                        <div class="actions">
+                            ${isActive
+                                ? `<button class="btn-secondary btn-sm" type="button" onclick="selectForInvoke('${safeName}')">Invoca</button>`
+                                : `<button class="btn-success btn-sm" type="button" onclick="scaleFunction('${encodedName}', 1)">Riattiva</button>`
+                            }
+                            ${fn.sourceCode && fn.sourceCode.trim()
+                                ? `<button class="btn-secondary btn-sm" type="button" onclick="viewCode('${encodedName}')">Codice</button>`
+                                : ''
+                            }
+                            <button class="btn-danger btn-sm" type="button" onclick="deleteFunction('${encodedName}')">Elimina</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('registerBtn');
+        const payload = {
+            name: document.getElementById('fnName').value.trim(),
+            imageDigest: document.getElementById('fnImage').value.trim() || 'inline-java',
+            sourceCode: document.getElementById('fnCode').value,
+            replicas: Number(document.getElementById('fnReplicas').value),
+            timeoutSeconds: Number(document.getElementById('fnTimeout').value)
+        };
+
+        btn.disabled = true;
+        btn.textContent = 'Compilazione e deploy...';
+        try {
+            const res = await fetch(API_BASE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.status === 201) {
+                showStatus(`Funzione "${payload.name}" registrata e pronta per l'invocazione.`);
+                document.getElementById('invokeName').value = payload.name;
+                await loadFunctions();
+            } else if (res.status === 409) {
+                showStatus(`La funzione "${payload.name}" esiste già: scegli un altro nome o eliminala prima.`, true);
+            // FunctionController.register() restituisce 400 con body vuoto: il messaggio resta generico anche per errori javac.
+            } else if (res.status === 400) {
+                showStatus('Configurazione o codice Java non valido: verifica la sintassi di handle(String input).', true);
+            } else {
+                showStatus(`Errore durante la registrazione (HTTP ${res.status}).`, true);
+            }
+        } catch (err) {
+            showStatus('Errore di rete: ' + err.message, true);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Registra e Deploya';
+        }
+    });
+
+    // I pulsanti inviano il numero assoluto calcolato all'ultimo rendering. Due clic rapidi possono chiedere lo stesso valore.
+    async function scaleFunction(encodedName, replicas) {
+        try {
+            const res = await fetch(`${API_BASE}/${encodedName}/scale?replicas=${replicas}`, {
+                method: 'POST'
+            });
+            if (res.ok) {
+                showStatus(`Repliche aggiornate a ${replicas}.`);
+                await loadFunctions();
+            } else {
+                const msg = await res.text();
+                showStatus(`Errore scaling (HTTP ${res.status}): ${msg}`, true);
+            }
+        } catch (err) {
+            showStatus('Errore di rete durante lo scaling: ' + err.message, true);
+        }
+    }
+
+    async function deleteFunction(encodedName) {
+        try {
+            const res = await fetch(`${API_BASE}/${encodedName}`, { method: 'DELETE' });
+            if (res.ok) {
+                showStatus('Funzione eliminata dal registro.');
+                await loadFunctions();
+            } else {
+                showStatus(`Errore eliminazione (HTTP ${res.status}).`, true);
+            }
+        } catch (err) {
+            showStatus('Errore di rete durante l\'eliminazione: ' + err.message, true);
+        }
+    }
+
+    function selectForInvoke(name) {
+        document.getElementById('invokeName').value = name;
+        const select = document.getElementById('invokeSelect');
+        if ([...select.options].some(opt => opt.value === name)) {
+            select.value = name;
+        }
+        document.getElementById('invokePayload').focus();
+    }
+
+    function viewCode(encodedName) {
+        const name = decodeURIComponent(encodedName);
+        const fn = allFunctions.find(item => item.name === name);
+        if (!fn) return;
+        activeModalCode = fn.sourceCode || '';
+        document.getElementById('dialogTitle').textContent = `Codice: ${fn.name}`;
+        document.getElementById('dialogCode').textContent = activeModalCode;
+        document.getElementById('codeDialog').showModal();
+    }
+
+    // Copia SOLO sourceCode (activeModalCode) in #fnCode lasciando invariati #fnName, #fnReplicas, #fnTimeout e #fnImage:
+    // un submit immediato riusa i metadati già nel form (rischio 409 Conflict sul vecchio nome o configurazione involontaria).
+    function copyCodeToEditor() {
+        document.getElementById('fnCode').value = activeModalCode;
+        document.getElementById('codeDialog').close();
+        showStatus('Codice copiato nell\'editor di registrazione.');
+    }
+
+    async function runInvocation() {
+        const name = document.getElementById('invokeName').value.trim();
+        if (!name) {
+            showStatus('Inserisci o seleziona il nome della funzione da invocare.', true);
+            return;
+        }
+        const body = document.getElementById('invokePayload').value;
+        const output = document.getElementById('invokeOutput');
+        const meta = document.getElementById('invokeMeta');
+        const btn = document.getElementById('invokeBtn');
+
+        btn.disabled = true;
+        btn.textContent = 'Esecuzione in corso...';
+        // La misura termina all'arrivo degli header. Include la rete e, per le funzioni inline, anche javac.
+        const t0 = performance.now();
+
+        try {
+            const res = await fetch(`${API_BASE}/${encodeURIComponent(name)}:invoke`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: body
+            });
+            const ms = Math.round(performance.now() - t0);
+            invocationHistory.push({ name, ms, ok: res.ok });
+            if (invocationHistory.length > 20) invocationHistory.shift();
+            drawLatencyChart();
+
+            const text = await res.text();
+            meta.textContent = `HTTP ${res.status} · ${ms} ms`;
+            output.textContent = text || '(risposta vuota)';
+
+            if (!res.ok) {
+                showStatus(text || `Invocazione fallita (HTTP ${res.status}).`, true);
+            } else {
+                showStatus(`Funzione "${name}" eseguita in ${ms} ms.`);
+            }
+            // Dopo un 504, loadFunctions() aggiorna la lista con replicas=0: con #showInactiveToggle deselezionato
+            // la funzione sparisce da tabella e #invokeSelect, ma #invokeName conserva il nome (nuovo "Esegui" -> HTTP 503).
+            await loadFunctions();
+        } catch (err) {
+            const ms = Math.round(performance.now() - t0);
+            invocationHistory.push({ name, ms, ok: false });
+            if (invocationHistory.length > 20) invocationHistory.shift();
+            drawLatencyChart();
+
+            meta.textContent = `Errore rete · ${ms} ms`;
+            output.textContent = 'Errore: ' + err.message;
+            showStatus('Errore di rete durante l\'invocazione: ' + err.message, true);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Esegui (:invoke)';
+        }
+    }
+
+    document.getElementById('invokeForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        runInvocation();
+    });
+
+    // Scorciatoia Ctrl/Cmd+Invio limitata al solo #invokePayload (non globale, non attiva in #fnCode;
+    // in #invokeName basta Invio tramite submit del form). Keydown non controlla invokeBtn.disabled,
+    // quindi pressioni rapide possono avviare più :invoke concorrenti.
+    document.getElementById('invokePayload').addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            runInvocation();
+        }
+    });
+
+    function clearChart() {
+        invocationHistory.length = 0;
+        drawLatencyChart();
+    }
+
+    function drawLatencyChart() {
+        const canvas = document.getElementById('latencyChart');
+        const ctx = canvas.getContext('2d');
+        // Canvas dimensionato in pixel CSS senza scala window.devicePixelRatio (possibile sfocatura su schermi HiDPI);
+        // fallback a 600 se il canvas è nascosto o ha clientWidth=0. Assegnare canvas.width resetta anche lo stato del contesto 2D.
+        const width = canvas.clientWidth || 600;
+        const height = canvas.height;
+        canvas.width = width;
+
+        ctx.clearRect(0, 0, width, height);
+
+        if (invocationHistory.length === 0) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '13px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Esegui una funzione per visualizzare la latenza in tempo reale', width / 2, height / 2);
+            return;
+        }
+
+        const padTop = 22;
+        const padBottom = 22;
+        const plotHeight = height - padTop - padBottom;
+        const maxMs = Math.max(...invocationHistory.map(d => d.ms), 10);
+        const slotWidth = width / 20;
+        const barWidth = Math.max(8, slotWidth - 6);
+
+        ctx.strokeStyle = '#263554';
+        ctx.beginPath();
+        ctx.moveTo(0, height - padBottom);
+        ctx.lineTo(width, height - padBottom);
+        ctx.stroke();
+
+        invocationHistory.forEach((item, idx) => {
+            const barHeight = Math.max(4, (item.ms / maxMs) * plotHeight);
+            const x = idx * slotWidth + 3;
+            const y = height - padBottom - barHeight;
+
+            ctx.fillStyle = item.ok ? '#22c55e' : '#ef4444';
+            ctx.fillRect(x, y, barWidth, barHeight);
+
+            ctx.fillStyle = '#cbd5e1';
+            ctx.font = '10px ui-monospace, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${item.ms}ms`, x + barWidth / 2, y - 5);
+
+            ctx.fillStyle = '#94a3b8';
+            const label = item.name.length > 6 ? item.name.slice(0, 5) + '…' : item.name;
+            ctx.fillText(label, x + barWidth / 2, height - 6);
+        });
+    }
+
+    window.addEventListener('resize', drawLatencyChart);
+    applyPreset('saluta');
+    document.getElementById('statusBanner').className = 'status-banner';
+    drawLatencyChart();
+    loadFunctions();
+</script>
+</body>
+</html>

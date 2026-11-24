@@ -3,6 +3,7 @@ package com.example.mini_nanofaas;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 
@@ -16,6 +17,10 @@ import org.springframework.stereotype.Service;
  */
 
 @Service
+// Anche sulla rete overlay, il servizio control-plane deve ricevere NANOFAAS_PROVIDER=swarm.
+// Se manca, Spring seleziona LocalProvider e un deploy di sola immagine può restituire 201
+// senza che compaia alcun servizio in «docker service ls».
+@ConditionalOnProperty(name = "nanofaas.provider", havingValue = "swarm")
 public class SwarmProvider implements ProviderFunzione {
 
     private static final Logger log = LoggerFactory.getLogger(SwarmProvider.class);

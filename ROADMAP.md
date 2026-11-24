@@ -83,7 +83,7 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
 
 ---
 
-### Fase 3: Provider Swarm (Ciclo di Vita Funzioni)
+### Fase 3: Provider di Esecuzione (Swarm & Locale), Java Inline & Web GUI
 - [x] **Passo 3.1**: Implementazione di `SwarmProvider.java`:
   - [x] Componente `@Service` per l'esecuzione di comandi Swarm CLI via `ProcessBuilder` (`docker service create --name fn-<nome> --network nanofaas-net --replicas <replicas> <immagine>`).
   - [x] Gestione sicura delle checked exception (`IOException`, `InterruptedException`) e controllo dell'exit code (`process.waitFor() == 0`).
@@ -108,6 +108,12 @@ Costruire una piattaforma FaaS minimale (ispirata a **nanofaas**) con:
   - [x] **Extract Interface & Dependency Inversion Principle (DIP / SOLID)**:
     - Estrazione dell'interfaccia `ProviderFunzione` da `SwarmProvider` con il contratto minimale di ciclo di vita (`deploy`, `remove`, `scale`).
     - Disaccoppiamento di `FunctionController` dal provider concreto Docker Swarm: il controller dipende ora unicamente dall'astrazione (`ProviderFunzione`), predisponendo l'architettura all'Open/Closed Principle (supporto trasparente a futuri provider come Kubernetes o Mock tramite `@ConditionalOnProperty`).
+- [x] **Passo 3.5 — Modalità locale, Java inline e console web**
+  - [x] Avvio senza Docker con `LocalProvider` predefinito. La proprietà `nanofaas.provider=swarm` seleziona il provider Docker.
+  - [x] Registrazione del sorgente in `FunctionSpec.sourceCode` (CLOB su H2). In locale il deploy verifica la compilazione. A ogni invocazione `InlineJavaExecutor` ricompila il sorgente, carica la classe in un nuovo `URLClassLoader` e cerca `handle(String)`.
+  - [x] Timeout sul risultato del metodo inline. Dopo l’interruzione e la conclusione del worker, il controller richiede lo scaling a zero, aggiorna H2 e risponde `504`. La funzione resta nel catalogo e risponde `503` finché ha zero repliche.
+  - [x] Catalogo con `GET /v1/functions` e console in `index.html` su `GET /`. La console permette di registrare e invocare funzioni, vedere il sorgente, mostrare e riattivare quelle inattive e consultare la latenza delle chiamate.
+  - [x] Quattro test HTTP in `FunctionControllerIntegrationTest` verificano la pagina iniziale, il ciclo CRUD con invocazione, l’esecuzione inline e il catalogo dopo un timeout. Il provider e il dispatcher sono simulati. La prova con servizi Swarm e Prometheus è prevista al passo 4.3.
 
 ---
 

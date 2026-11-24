@@ -1,7 +1,9 @@
 package com.example.mini_nanofaas;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 
 // quanto ho aggiunto il bean @Entity la prima volta mi ha dato errore.
 // Devo prima modificare build.gradle e poi ANCHE fare reload gradle
@@ -19,6 +21,13 @@ public class FunctionSpec {
     private String imageDigest;
     private int replicas;
     private int timeoutSeconds;
+
+    // Su H2 il sorgente è un CLOB. Il valore 10000 descrive la colonna per JPA;
+    // né il setter né hasValidConfiguration() controllano la lunghezza del JSON ricevuto.
+    // Se non blank, questo campo attiva l'esecuzione inline in FunctionController.invoke() al posto di Docker.
+    @Lob
+    @Column(length = 10000)
+    private String sourceCode;
 
     // Costruttore pieno
     public FunctionSpec(String name, String imageDigest, int replicas, int timeoutSeconds) {
@@ -60,6 +69,21 @@ public class FunctionSpec {
         this.timeoutSeconds = timeoutSeconds;
     }
 
+    public String getSourceCode() {
+        return sourceCode;
+    }
+
+    // A differenza di setReplicas/setTimeoutSeconds, nessuna validazione in deserializzazione Jackson:
+    // errori di sintassi o assenza di handle(String) emergono solo in deploy() o all'invocazione.
+    public void setSourceCode(String sourceCode) {
+        this.sourceCode = sourceCode;
+    }
+
+    // strip() ignora anche whitespace Unicode: sorgenti vuoti/bianchi non deviano il routing su InlineJavaExecutor.
+    public boolean hasSourceCode() {
+        return this.sourceCode != null && !this.sourceCode.strip().isEmpty();
+    }
+
     // =========================================================================================
     // METODI DI DOMINIO E LOGICA DI BUSINESS (Refactoring: Eliminazione del Code Smell "Data Class")
     // Tecnica applicata: "Move Method" e "Encapsulate Invariants" (Martin Fowler / GRASP Information Expert)
@@ -94,7 +118,11 @@ public class FunctionSpec {
      */
     public boolean hasValidConfiguration() {
         boolean isFunctionNameValid = this.name != null && !this.name.strip().isEmpty();
-        boolean isImageDigestValid = this.imageDigest != null && !this.imageDigest.strip().isEmpty();
+        // OR inclusivo (non XOR): ammette imageDigest e sourceCode insieme (es. "inline-java" dalla GUI);
+        // se entrambi sono valorizzati, invoke() dà comunque priorità a hasSourceCode().
+        // Nota Jackson: valori invalidi presenti nel JSON falliscono prima nei setter (400), mentre
+        // campi primitivi omessi restano a 0 (replicas=0 è valido; timeoutSeconds=0 viene respinto qui sotto).
+        boolean isImageDigestValid = (this.imageDigest != null && !this.imageDigest.strip().isEmpty()) || hasSourceCode();
         boolean areReplicasValid = this.replicas >= 0;
         boolean isTimeoutSecondsValid = this.timeoutSeconds > 0;
 
