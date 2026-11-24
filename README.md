@@ -7,48 +7,29 @@ Il progetto è realizzato con **Java 25** e **Spring Boot 4.1.x**, è eseguibile
 
 ## 🏛️ Architettura
 
-Il Control Plane applica il principio di **Dependency Inversion** tramite l'interfaccia `ProviderFunzione` e supporta due modalità operative selezionate a boot via `@ConditionalOnProperty`:
-- **Modalità Locale (default)**: attiva `LocalProvider` (`matchIfMissing = true`) ed esegue funzioni Java scritte inline attraverso `InlineJavaExecutor`, senza dipendere da Docker.
-- **Modalità Docker Swarm (opzionale)**: attiva `SwarmProvider` impostando `nanofaas.provider=swarm`, orchestrando container dedicati sulla rete overlay `nanofaas-net`.
+La Web GUI e i client REST usano lo stesso `FunctionController`. Il controller consulta il catalogo H2 tramite `FunctionRegistry`. All’avvio, la proprietà `nanofaas.provider` seleziona l’implementazione di `ProviderFunzione` per registrare, scalare e rimuovere le funzioni.
+
+### Modalità locale · Java inline
+
+Con il provider predefinito, la registrazione verifica che il sorgente compili. Ogni invocazione lo ricompila ed esegue `handle(String)`.
 
 ```mermaid
 flowchart TD
-    Browser(["Browser / Web GUI<br/>(GET / — index.html)"])
-    Client(["Client / API Caller"])
+    API["FunctionController"] -->|registra| Local["LocalProvider"]
+    Local -->|verifica compilazione| Java["InlineJavaExecutor"]
+    API -->|invoca| Java
+```
 
-    subgraph ControlPlane ["Control Plane (Spring Boot — @EnableRetry)"]
-        Controller["FunctionController<br/>(/v1/functions)"]
-        Registry["FunctionRegistry<br/>(Spring Data JPA / H2)"]
-        Inline["InlineJavaExecutor<br/>(ToolProvider javac + URLClassLoader + ExecutorService)"]
-        ProviderIf{{"ProviderFunzione<br/>(@ConditionalOnProperty)"}}
-        Local["LocalProvider<br/>(default: local / matchIfMissing)"]
-        Swarm["SwarmProvider<br/>(nanofaas.provider=swarm)"]
-        Health["FunctionHealthChecker<br/>(Spring Retry: 10 tentativi, 500ms)"]
-        DockerCli["DockerCliClient<br/>(ProcessBuilder)"]
-        Dispatcher["FunctionDispatcher<br/>(RestClient)"]
-        Actuator["Actuator / Micrometer<br/>(/actuator/health, /actuator/prometheus)"]
-    end
+### Modalità Docker Swarm · Funzioni containerizzate
 
-    subgraph SwarmNet ["Docker Swarm Overlay Network (nanofaas-net) — opzionale"]
-        FnA["fn-{name} (Container :8080)"]
-        Prometheus["Server Prometheus (previsto nella fase 4)"]
-    end
+Con `nanofaas.provider=swarm`, il provider crea il servizio e ne verifica la disponibilità. Le invocazioni raggiungono il servizio sulla rete `nanofaas-net`.
 
-    Browser -->|HTTP REST /v1/functions| Controller
-    Client -->|HTTP REST /v1/functions| Controller
-    Controller -->|CRUD / Catalogo| Registry
-    Controller -->|deploy / scale / remove| ProviderIf
-    ProviderIf -.->|default| Local
-    ProviderIf -.->|provider=swarm| Swarm
-    Local -->|validateCompilation| Inline
-    Controller -->|invoke con sourceCode| Inline
-    Controller -->|invoke containerizzata| Dispatcher
-    Swarm -->|create / update / remove| DockerCli
-    Swarm -->|checkReadiness| Health
-    DockerCli -.->|docker service CLI| SwarmNet
-    Health -->|GET /health| FnA
-    Dispatcher -->|POST /invoke| FnA
-    Prometheus -->|Scrape /actuator/prometheus| Actuator
+```mermaid
+flowchart TD
+    API["FunctionController"] -->|registra| Swarm["SwarmProvider"]
+    API -->|invoca| Dispatcher["FunctionDispatcher"]
+    Swarm -->|crea e verifica| Fn["Servizio fn-{name}"]
+    Dispatcher -->|POST /invoke| Fn
 ```
 
 I componenti principali del sistema sono:
