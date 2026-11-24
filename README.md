@@ -1,7 +1,7 @@
 # mini_nanofaas
 
 Una piattaforma **Function-as-a-Service (FaaS)** didattica, leggera e modulare ispirata a [nanofaas](https://github.com/miciav/nanofaas).  
-Il progetto è realizzato con **Java 25** e **Spring Boot 4.1.x**, è eseguibile **in locale senza Docker** tramite provider locale di default (`LocalProvider`), compilazione/esecuzione **Java inline** (`InlineJavaExecutor`) e **Web GUI** integrata (`/`), e supporta opzionalmente il deploy su **Docker Swarm** (`nanofaas.provider=swarm`).
+Il progetto è realizzato con **Java 25** e **Spring Boot 4.1.x**, è eseguibile **in locale senza Docker** tramite provider locale di default (`LocalProvider`), compilazione/esecuzione **Java inline** (`InlineJavaExecutor`) e **Web GUI** integrata (`/`), e supporta opzionalmente il deploy su **Docker Swarm** (`nanofaas.provider=swarm`)
 
 ---
 
