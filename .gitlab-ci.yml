@@ -1,41 +1,42 @@
 # Pipeline GitLab CI/CD per mini_nanofaas
-# Definizione degli stage della pipeline (al momento attiviamo 'build', gli altri li aggiungeremo nelle fasi successive)
 stages:
   - build
+  - verify   # che include lint
+  - test
+  - package
+  - relase
+  - docs
+  - deploy
 
 # Variabili globali per ottimizzare Gradle in CI
+# vedere qua per spiegazioni # https://docs.gitlab.com/ci/variables/
 variables:
-  # Imposta la directory cache di Gradle dentro il progetto per poterla salvare tra i job
-  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
-  # Disabilita il daemon Gradle in CI per evitare processi appesi e risparmiare memoria
-  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle" # Imposta la directory cache di Gradle dentro il progetto per poterla salvare tra i job
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"   # Disabilita il daemon Gradle in CI per evitare processi appesi e risparmiare memoria
+  # in teoria posso passare alcune di queste cose con gradle.properties ma al prof non interessa questa cosa, gli interessa solo il .yml
 
+# Grazie alla variabile globale GRADLE_USER_HOME ora abbiamo la cache dentro il job
 # Cache condivisa tra i job per evitare di riscaricare le dipendenze ad ogni esecuzione
 cache:
-  key: "$CI_COMMIT_REF_SLUG-gradle"
+  key: "$CI_COMMIT_REF_SLUG-gradle"    # riusiamo il nome del branch
   paths:
     - .gradle/wrapper
     - .gradle/caches
 
-# ==============================================================================
 # STAGE 1: BUILD
-# Compila il progetto Java (senza eseguire i test, che avranno uno stage dedicato)
-# ==============================================================================
+# Compila il progetto Java
 build_job:
   stage: build
   # Immagine Docker con JDK 25 (allineata al toolchain in build.gradle)
   image: eclipse-temurin:25-jdk
-  before_script:
-    # Rende eseguibile il wrapper Gradle
+  before_script:      # Rende eseguibile il wrapper Gradle
     - chmod +x ./gradlew
-  script:
-    # Compila il codice sorgente e i test senza eseguirli
+  script:             # Compila il codice sorgente e i test senza eseguirli
     - ./gradlew compileJava compileTestJava --no-daemon
-  artifacts:
-    # Passa i file compilati agli stage successivi
+  artifacts:          # Passa i file compilati agli stage successivi
     paths:
-      - build/
+      - build/        # cartella di output della compilazione di Gradle, ovviamente serve agli stage successivi
     expire_in: 1 hour
-  rules:
-    # Esegue lo stage build sia su develop che su main
-    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
+  rules:              # Esegue lo stage build sia su develop che su master
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master"'
+# questa ultima parte (rules: if...) forse non va messa, oppure sì. Quasi sicuramente non lo abbiamo visto a lezione
