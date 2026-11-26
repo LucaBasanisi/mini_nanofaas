@@ -78,6 +78,10 @@ lint_jacoco:
   artifacts:
     paths:
       - build/reports/jacoco/        # ./gradlew test jacocoTestReport salva il report in questa cartella
+    reports:                         # questo non lo abbiamo visto a lezione ma è cmq bello aggiungerlo
+      coverage_report:               # https://docs.gitlab.com/ci/yaml/artifacts_reports/
+        coverage_format: cobertura   # lol
+        path: build/reports/jacoco/test/jacocoTestReport.xml   # gitlab si prende il file xml e lo mostra nel commit
     expire_in: 1 hour
     when: always
   rules:
