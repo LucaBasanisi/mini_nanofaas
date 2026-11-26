@@ -20,32 +20,32 @@ Questa roadmap è pensata come percorso guidato passo passo per completare il **
 ## Piano di Lavoro Passo Passo
 
 ### Fase 0 — Setup Repository e Branching Strategy
-- [ ] Creare la repository su GitLab: `2026_assignment2_{your_project_name}`.
-- [ ] Aggiungere l'utente `sw_dev_process_course` con ruolo **Developer**.
-- [ ] Definire la strategia dei **2 branch** per il team da 4 persone, ad esempio:
+- [x] Creare la repository su GitLab: `2026_assignment2_{your_project_name}` e collegarla da IntelliJ (**Git → Manage Remotes... → Push**).
+- [x] Aggiungere l'utente `sw_dev_process_course` con ruolo **Developer** (da GitLab: **Manage → Members**).
+- [x] Definire la strategia dei **2 branch** per il team da 4 persone (in IntelliJ dal widget **Git Branch** in basso a destra o **Git → Branches... → New Branch**):
   - **Branch `develop`** (integrazione continua): `build` → `verify` (statica + dinamica in parallelo) → `test`.
   - **Branch `main`** (rilascio e documentazione): `build` → `verify` → `test` → `package` → `release` → `docs` *(+ `deploy` opzionale)*.
-- [ ] Verificare che il progetto compili e giri in locale (`./gradlew build`).
+- [x] Verificare che il progetto compili e giri in locale: dalla finestra **Gradle** di IntelliJ (pannello laterale destro) eseguire **Tasks → build → build** (equivalente a `./gradlew build`).
 
 ### Fase 1 — Stage `build` (Compilazione e Dipendenze)
 - **Cosa impariamo**: come GitLab Runner scarica le dipendenze Gradle e compila il progetto Java usando la cache per velocizzare i job.
-- [ ] Configurare il job `build` in `.gitlab-ci.yml` usando un'immagine Docker Java/Gradle adatta.
+- [ ] Creare/modificare `.gitlab-ci.yml` in IntelliJ (sfruttando autocompletamento e validazione YAML integrata) configurando il job `build` con un'immagine Docker Java/Gradle adatta.
 - [ ] Impostare `cache` per `.gradle/` e `artifacts` per passare i file compilati agli stage successivi.
 
 ### Fase 2 — Stage `verify` (Analisi Statica e Dinamica in Parallelo)
 - **Cosa impariamo**: differenza tra analisi statica (qualità/bug senza eseguire il codice) e analisi dinamica (comportamento a runtime), e come eseguirle **in parallelo** in GitLab CI.
-- [ ] **Analisi statica**: integrare in `build.gradle` tool come **Checkstyle** e/o **SpotBugs** (o PMD) e creare il job dedicato.
-- [ ] **Analisi dinamica**: configurare un job parallelo nello stage `verify` (es. **JaCoCo** per code coverage / profiling o esecuzione con analisi runtime/memory).
-- [ ] Verificare nella UI di GitLab che i due job partano in parallelo nello stesso stage.
+- [ ] **Analisi statica**: integrare in `build.gradle` tool come **Checkstyle** e/o **SpotBugs** (o PMD) e creare il job dedicato. In IntelliJ puoi testare i task dalla finestra **Gradle → Tasks → verification** (es. `checkstyleMain`, `spotbugsMain`) e visualizzare i report HTML generati in `build/reports/`.
+- [ ] **Analisi dinamica**: configurare un job parallelo nello stage `verify` (es. **JaCoCo** per code coverage / profiling o esecuzione con analisi runtime/memory). In IntelliJ puoi verificare la coverage anche in locale con **Run with Coverage**.
+- [ ] Verificare nella UI di GitLab (o dal pannello **GitLab** / Merge Requests di IntelliJ) che i due job partano in parallelo nello stesso stage.
 
 ### Fase 3 — Stage `test` (Unit / Integration Test)
 - **Cosa impariamo**: automatizzare l'esecuzione dei test e pubblicare i report JUnit direttamente su GitLab.
-- [ ] Configurare il job `test` (`./gradlew test`).
+- [ ] Configurare il job `test` (`./gradlew test`). In IntelliJ puoi eseguire e debuggare i test direttamente con il tasto destro sulla cartella `src/test` → **Run 'All Tests'** o dalla finestra **Gradle → Tasks → verification → test**.
 - [ ] Esporre i report XML di JUnit tramite `artifacts:reports:junit` per visualizzare i risultati nelle Merge Request e nelle pipeline.
 
 ### Fase 4 — Stage `package` (Creazione dell'Artefatto)
 - **Cosa impariamo**: generare il pacchetto eseguibile (`.jar`) pronto per la distribuzione.
-- [ ] Configurare `./gradlew bootJar` / `jar` (o `assemble`) per produrre l'artefatto.
+- [ ] Configurare `./gradlew bootJar` / `jar` (o `assemble`) per produrre l'artefatto; testabile in locale da **Gradle → Tasks → build → bootJar** / **assemble**.
 - [ ] Salvare il `.jar` come `artifacts` per lo stage `release`.
 
 ### Fase 5 — Stage `release` (Docker Image & Container Registry)

@@ -1,0 +1,41 @@
+# Pipeline GitLab CI/CD per mini_nanofaas
+# Definizione degli stage della pipeline (al momento attiviamo 'build', gli altri li aggiungeremo nelle fasi successive)
+stages:
+  - build
+
+# Variabili globali per ottimizzare Gradle in CI
+variables:
+  # Imposta la directory cache di Gradle dentro il progetto per poterla salvare tra i job
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  # Disabilita il daemon Gradle in CI per evitare processi appesi e risparmiare memoria
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+# Cache condivisa tra i job per evitare di riscaricare le dipendenze ad ogni esecuzione
+cache:
+  key: "$CI_COMMIT_REF_SLUG-gradle"
+  paths:
+    - .gradle/wrapper
+    - .gradle/caches
+
+# ==============================================================================
+# STAGE 1: BUILD
+# Compila il progetto Java (senza eseguire i test, che avranno uno stage dedicato)
+# ==============================================================================
+build_job:
+  stage: build
+  # Immagine Docker con JDK 25 (allineata al toolchain in build.gradle)
+  image: eclipse-temurin:25-jdk
+  before_script:
+    # Rende eseguibile il wrapper Gradle
+    - chmod +x ./gradlew
+  script:
+    # Compila il codice sorgente e i test senza eseguirli
+    - ./gradlew compileJava compileTestJava --no-daemon
+  artifacts:
+    # Passa i file compilati agli stage successivi
+    paths:
+      - build/
+    expire_in: 1 hour
+  rules:
+    # Esegue lo stage build sia su develop che su main
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"'
