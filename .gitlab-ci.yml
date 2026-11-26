@@ -40,3 +40,45 @@ build_job:
   rules:              # Esegue lo stage build sia su develop che su master
     - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master"'
 # questa ultima parte (rules: if...) forse non va messa, oppure sì. Quasi sicuramente non lo abbiamo visto a lezione
+
+# ------------------------------------------------------------------------------------------------------------------------------------------------
+# Verify
+# Ho aggiunto in build.gradle i plugin di "pmd" e "jacoco" e li ho già configurati
+# per pmd bisogna sapere che ho messo consoleOuput = true per stampare su terminale (e non su HTML)
+# ho messo anche ignoreFailures = true perché ovviamente non importa se ci sono "difetti" nello stile
+lint_pmd:
+  stage: verify
+  image: eclipse-temurin:25-jdk
+  before_script:
+    - chmod +x ./gradlew
+  script:
+    - ./gradlew pmdMain --no-daemon
+  needs:                          # https://docs.gitlab.com/ci/yaml/needs/
+    - build_job
+  # ovviamente tutti i job dipendono da build, ma l'analisi statica no, possiamo fare needs: []
+  # però l'assignment vuole che eseguiamo il verify in parallelo, quindi vabbuò
+  artifacts:
+    paths:
+      - build/reports/pmd/        # ./gradlew pmdMain salva il report in questa cartella
+    expire_in: 1 hour
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master"'
+
+
+lint_jacoco:
+  stage: verify
+  image: eclipse-temurin:25-jdk
+  before_script:
+    - chmod +x ./gradlew
+  script:
+    - ./gradlew test jacocoTestReport --no-daemon
+  needs:
+    - build_job
+  artifacts:
+    paths:
+      - build/reports/jacoco/        # ./gradlew test jacocoTestReport salva il report in questa cartella
+    expire_in: 1 hour
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "master"'
